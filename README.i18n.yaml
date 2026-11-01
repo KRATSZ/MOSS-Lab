@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write README.md
 /moss-lab:
-  en: 2d31c2dd7cbe3f7d
-  zh: d61518619194d1b2
+  en: 785e140253e843b1
+  zh: 8c13f1cc88808052
 /moss-lab/features:
-  en: 1690d2d846f81638
-  zh: 46038d8eff9e36b8
+  en: b92e9e93b538f45b
+  zh: 33f0a496e7744a0e
 /moss-lab/system-architecture:
-  en: caae6c3fb411f33e
-  zh: 84b9a242c62fca2c
+  en: e4e77776463278cc
+  zh: fd6e57c5fae2b169
 /moss-lab/system-architecture/workflow-lifecycle:
   en: 9c586ba027172981
   zh: d4307500a86bcbc9

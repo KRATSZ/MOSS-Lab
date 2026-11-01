@@ -8,11 +8,9 @@
 [![Package Manager: uv](https://img.shields.io/badge/Package%20Manager-uv-DE5FE9.svg?logo=astral)](https://docs.astral.sh/uv/)
 [![Architecture: Cordis](https://img.shields.io/badge/Architecture-Cordis_Plugin-6366f1.svg)](https://github.com/cordiverse/cordis)
 
-![MOSS Lab Hero Banner](docs/images/moss-lab-hero.png)
+![MOSS Lab Automated Workstation](docs/images/moss-lab-banner.png)
 
 MOSS Lab 将网页 AI 智能体、本地 Opentrons 移液协议仿真与交互式 Flex 3D 关键帧可视化整合为一个统一平台。项目基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 架构，并融合了来自 [LabscriptAI OT](https://github.com/KRATSZ/labscriptai-ot) 的机器人自动化与物理仿真资产，使科研人员能够借助确定性的本地安全隔离机制与实时物理空间反馈，高效开展移液自动化实验。
-
-![MOSS Lab Architecture](docs/images/architecture.svg)
 
 > **项目状态：** 实验阶段。本地模拟与关键帧动画仅提供空间逻辑验证，不能证明湿实验生物学准确性、物理机器就绪或操作安全。机器人状态监控模块仅工作在只读遥测模式下，绝不会主动触发实体硬件机械动作。
 
@@ -24,9 +22,13 @@ MOSS Lab 将网页 AI 智能体、本地 Opentrons 移液协议仿真与交互�
 - **小智 AI 硬件跨端委派**：支持通过安全的外部 WSS 通道连接小智 MCP 智能硬件，实现语音/移动端随时委派实验任务并实时追踪进度，凭据严格保密。
 - **只读机器人遥测探测**：轻量级集成无副作用的只读状态查询（`GET /health` 与 `GET /instruments`），安全探测现场设备就绪状态。
 
+![MOSS Lab Software Console](docs/images/moss-lab-console.png)
+
 ## 系统架构
 
 MOSS Lab 将生物实验自动化解耦为四个健壮层级：用户交互层、Harness 核心治理层、协议仿真层与 3D 可视化层。
+
+![MOSS Lab Architecture](docs/images/architecture.svg)
 
 ### 执行工作流程
 
