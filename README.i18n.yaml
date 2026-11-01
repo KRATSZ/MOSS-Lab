@@ -3,23 +3,32 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write README.md
 /moss-lab:
-  en: 3a2b2e68a8c233f3
-  zh: d0313834d979a247
+  en: e3ae4767003dff0c
+  zh: 20af0f0babce389e
 /moss-lab/features:
-  en: a316cb4661738f9e
-  zh: 3dd2af230b563f5c
+  en: 1690d2d846f81638
+  zh: 46038d8eff9e36b8
+/moss-lab/system-architecture:
+  en: caae6c3fb411f33e
+  zh: 84b9a242c62fca2c
+/moss-lab/system-architecture/workflow-lifecycle:
+  en: 9c586ba027172981
+  zh: d4307500a86bcbc9
 /moss-lab/requirements:
-  en: 92e61d96be69a826
-  zh: 367311c1919e593b
+  en: 51053779c0dc8d06
+  zh: 34454bafc2c4f15d
 /moss-lab/getting-started:
-  en: d46aa5e81154bee1
-  zh: 21642d9ff3c1c7f9
+  en: 6759dad4fb0f7bc4
+  zh: 3cbaef5682c80819
+/moss-lab/configuration:
+  en: 4f8eef0df79c55f3
+  zh: 0b8b3323b433b878
 /moss-lab/project-layout:
-  en: c0691715de2ffb71
-  zh: c90b374725cda2f3
+  en: 559182f6344c3d35
+  zh: cfc3d58a8c49ff12
 /moss-lab/sources-and-citation:
-  en: cf63178fceb2453c
-  zh: 602fa713d617d38d
+  en: 3b1be07596e8d23c
+  zh: 0374b816beac022f
 /moss-lab/license:
-  en: e651912715296e87
-  zh: 5a96dba552e7d9f1
+  en: 334b7145374c6cab
+  zh: fef8c9f2ae850c0c
