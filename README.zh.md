@@ -8,6 +8,8 @@
 [![Package Manager: uv](https://img.shields.io/badge/Package%20Manager-uv-DE5FE9.svg?logo=astral)](https://docs.astral.sh/uv/)
 [![Architecture: Cordis](https://img.shields.io/badge/Architecture-Cordis_Plugin-6366f1.svg)](https://github.com/cordiverse/cordis)
 
+![MOSS Lab Hero Banner](docs/images/moss-lab-hero.png)
+
 MOSS Lab 将网页 AI 智能体、本地 Opentrons 移液协议仿真与交互式 Flex 3D 关键帧可视化整合为一个统一平台。项目基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 架构，并融合了来自 [LabscriptAI OT](https://github.com/KRATSZ/labscriptai-ot) 的机器人自动化与物理仿真资产，使科研人员能够借助确定性的本地安全隔离机制与实时物理空间反馈，高效开展移液自动化实验。
 
 ![MOSS Lab Architecture](docs/images/architecture.svg)

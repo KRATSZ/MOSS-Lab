@@ -8,6 +8,8 @@ English | [中文](README.zh.md)
 [![Package Manager: uv](https://img.shields.io/badge/Package%20Manager-uv-DE5FE9.svg?logo=astral)](https://docs.astral.sh/uv/)
 [![Architecture: Cordis](https://img.shields.io/badge/Architecture-Cordis_Plugin-6366f1.svg)](https://github.com/cordiverse/cordis)
 
+![MOSS Lab Hero Banner](docs/images/moss-lab-hero.png)
+
 MOSS Lab brings a web-based AI agent, local Opentrons liquid-handling protocol simulation, and interactive Flex 3D keyframe visualization together into a unified platform. Built upon [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) and incorporating simulation assets from [LabscriptAI OT](https://github.com/KRATSZ/labscriptai-ot), MOSS Lab enables researchers to automate liquid-handling experimentation with deterministic safety isolation and real-time spatial physics feedback.
 
 ![MOSS Lab Architecture](docs/images/architecture.svg)
