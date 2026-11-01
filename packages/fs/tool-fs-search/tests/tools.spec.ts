@@ -369,7 +369,7 @@ describe('command construction (plain argv)', () => {
   })
 
   it('grep: fixed rg --json argv with the pattern in --regexp= form', () => {
-    expect(buildGrepCommand({ pattern: 'foo.*bar' })).toEqual(['--json', '--regexp=foo.*bar'])
+    expect(buildGrepCommand({ pattern: 'foo.*bar' })).toEqual(['--json', '--regexp=foo.*bar', '--', '.'])
   })
 
   it('grep: include in --glob= form, path behind --, both plain elements', () => {
@@ -388,7 +388,7 @@ describe('command construction (plain argv)', () => {
   ])('keeps %s as ONE inert argv element (no shell layer to escape)', (_label, raw) => {
     // The argv vector is handed to rg verbatim: hostile text cannot break out
     // of its argument because there is no shell between the vector and rg.
-    expect(buildGrepCommand({ pattern: raw })).toEqual(['--json', `--regexp=${raw}`])
+    expect(buildGrepCommand({ pattern: raw })).toEqual(['--json', `--regexp=${raw}`, '--', '.'])
     expect(buildGlobCommand({ pattern: raw })[1]).toBe(`--glob=${raw}`)
   })
 })
@@ -420,7 +420,7 @@ describe('workdir derivation and signal forwarding', () => {
     const spec = subprocess.spawns[0]
     // --no-config keeps a host RIPGREP_CONFIG_PATH from injecting a
     // preprocessor into this unconfined spawn.
-    expect(spec?.argv).toEqual([rgPath, '--no-config', '--json', '--regexp=needle'])
+    expect(spec?.argv).toEqual([rgPath, '--no-config', '--json', '--regexp=needle', '--', '.'])
     expect(spec?.stdio.stdin).toBe('ignore')
     // stdout gets the tool's parse budget; stderr is a diagnostic excerpt;
     // both are the seam's diagnostic-tail shape (no spill files requested).

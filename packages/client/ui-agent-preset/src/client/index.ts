@@ -34,7 +34,6 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { AgentPresetLabel } from './AgentPresetLabel.tsx'
-import { CreatePluginMenuItem } from './CreatePluginMenuItem.tsx'
 import type { AgentPresetLabelInjected } from './AgentPresetLabel.tsx'
 import { AgentPresetSeat } from './AgentPresetSeat.tsx'
 import type { AgentPresetSeatInjected } from './AgentPresetSeat.tsx'
@@ -75,7 +74,7 @@ export function apply(ctx: ClientContext): void {
   const presetSettings = ctx.configForms.get(AGENT_PRESET_SETTINGS_NS)
   let active = true
   // Host preferences start at false before their first accepted document.
-  const codingToolsDisabled = (): boolean => active && toolsSettings.getSnapshot().value?.enabled === false
+  const codingToolsDisabled = (): boolean => active
   const controller = new AgentPresetSettingsController(ctx)
   const staged: AgentPresetStage = { id: undefined, introduce: false }
   const seats = new WeakMapWithValues<SessionBinding, AgentPresetSeatController>()
@@ -117,17 +116,6 @@ export function apply(ctx: ClientContext): void {
     void unboundSeat.apply()
     for (const seat of seats.values) void seat.apply()
   }), 'ui-agent-preset: Developer tools gate')
-  const mainBlank = () => Object.values(ctx.sessions.list.getSnapshot().byId)
-    .find((session) => {
-      /* v8 ignore next -- retained source counts omit zero-valued entries. */
-      return session.blank && (session.retainedBy.mainView ?? 0) > 0
-    })
-  const mainBlankSeat = (): AgentPresetSeatController | undefined => {
-    const summary = mainBlank()
-    const binding = summary === undefined ? undefined : ctx.sessions.binding(summary.id)
-    return binding === undefined ? undefined : seatFor(binding)
-  }
-
   ctx.effect(() => ctx.locale.register('settings.agentPreset', { zh, en, ja, es, fr, de, ru, pt }), 'ui-agent-preset: settings row dictionaries')
 
   ctx.effect(() => {
@@ -175,12 +163,6 @@ export function apply(ctx: ClientContext): void {
     }
   }, 'ui-agent-preset: settings refresh')
 
-  // The settings section's conversational authoring entry: stage the
-  // self-referential preset and land a new session on it. Bound inside the
-  // conversation scope below (the seat and the session flow live there) and
-  // unbound with it, so the section's face reads the current binding per
-  // render and simply hides the button while no flow exists.
-  let creatorDraft: (() => void) | undefined
   ctx.inject(['slots', 'conversation', 'sessions', 'uiWorkspace'], (scope: ClientContext) => {
     const seatInjected = (sessionId: SessionId | undefined): AgentPresetSeatInjected => {
       const binding = sessionId === undefined ? undefined : ctx.sessions.binding(sessionId)
@@ -213,16 +195,7 @@ export function apply(ctx: ClientContext): void {
       load: () => controller.load(),
     })
 
-    const startCreatorDraft = () => {
-      // The Host composes the reused draft or new Session; the stage only drives the chip's display and introduction.
-      // Navigation opens another blank when the main blank lists a different preset, so that blank is not staged.
-      const listed = mainBlank()?.projectionValues?.agentPreset
-      if (typeof listed !== 'string' || listed === 'cordis') (mainBlankSeat() ?? unboundSeat).stage('cordis', true)
-      scope.uiWorkspace.startSession(undefined, { clearPreviousDraft: false, agentPreset: 'cordis' })
-    }
-
     scope.effect(() => {
-      creatorDraft = startCreatorDraft
       const chip = scope.slots.register({
         name: 'conversation.hero.agentPreset',
         locale: 'settings.agentPreset',
@@ -237,22 +210,12 @@ export function apply(ctx: ClientContext): void {
         inject: labelInjected,
       }, AgentPresetLabel)
       return () => {
-        creatorDraft = undefined
         chip()
         label()
       }
     }, 'ui-agent-preset: new-session chip and header label')
 
-    scope.slots.inject('plugins.add.actions', () => scope.slots.register({
-      name: 'plugins.add.actions',
-      id: 'create-plugin',
-      locale: 'settings.agentPreset',
-      inject: () => ({
-        hooks: { agentPresets: controller.store },
-        load: () => controller.load(),
-        startCreatorDraft,
-      }),
-    }, CreatePluginMenuItem))
+
   })
 
   /** Capture the exact blank Session one Settings action may update. */
@@ -274,7 +237,6 @@ export function apply(ctx: ClientContext): void {
     load: () => section.load(),
     view: (id: string) => section.view(id),
     closeView: () => { section.closeView() },
-    ...creatorDraft === undefined ? {} : { startCreatorDraft: creatorDraft },
     makeDefault: (id: string) => section.makeDefault(id, captureBlankSessionSync()),
   })
 

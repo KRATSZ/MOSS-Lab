@@ -216,6 +216,29 @@ describe('search tools over the real subprocess service + the packaged rg', () =
       expect(output).toContain('notes.md\nLine 1: alpha appears here too')
     })
 
+    it('reports an empty filtered workspace as no matches and allows a broader retry', async () => {
+      const empty = await call('grep', { pattern: 'alpha', include: '*.py' }, agent())
+      expect(empty.isError).toBe(false)
+      expect(text(empty)).toBe('No matches found')
+      const broader = await call('grep', { pattern: 'alpha' }, agent())
+      expect(broader.isError).toBe(false)
+      expect(text(broader)).toContain('src/alpha.ts')
+    })
+
+    it('respects ignore rules when the default workspace has no searchable files', async () => {
+      const ignoredDir = await mkdtemp(join(tmpdir(), 'dsh-search-ignored-'))
+      try {
+        await writeFile(join(ignoredDir, '.ignore'), '*.txt\n')
+        await writeFile(join(ignoredDir, 'ignored.txt'), 'alpha\n')
+        const scopedAgent = { session: { header: { id: 'ignored', cwd: ignoredDir } } }
+        const result = await call('grep', { pattern: 'alpha' }, scopedAgent)
+        expect(result.isError).toBe(false)
+        expect(text(result)).toBe('No matches found')
+      } finally {
+        await rm(ignoredDir, { recursive: true, force: true })
+      }
+    })
+
     it('greps a single FILE target', async () => {
       const result = await call('grep', { pattern: 'alpha', path: 'notes.md' }, agent())
       expect(text(result)).toBe('Found 1 match\n\nnotes.md\nLine 1: alpha appears here too')

@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { AgentPresetRow } from '@deepseek-ai/dsh-agent-preset-registry/types'
-import { AGENT_PRESET_SETTINGS_NS, requiresCodingTools, writeDefaultPreset } from './settings-store.ts'
+import { AGENT_PRESET_SETTINGS_NS, isSelectablePreset, writeDefaultPreset } from './settings-store.ts'
 
 /** The read-only composition viewer over one preset. */
 export interface PresetView {
@@ -90,7 +90,8 @@ export class AgentPresetSectionController {
     await this.load()
     if (!shouldReset() || this.store.getSnapshot().status !== 'ready') return
     const rows = this.store.getSnapshot().rows
-    if (!requiresCodingTools(rows.find(row => row.isDefault))) return
+    const selected = rows.find(row => row.isDefault)
+    if (selected === undefined || isSelectablePreset(selected)) return
     if (!rows.some(row => row.id === 'standard' && row.broken === undefined)) {
       this.set({ error: this.ctx.locale.bind('settings.agentPreset')('standardUnavailable') })
       return

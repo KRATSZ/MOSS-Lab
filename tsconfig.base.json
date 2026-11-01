@@ -274,6 +274,8 @@
       "@deepseek-ai/dsh-client-resources/client": ["./packages/client/resources/src/client"],
       "@deepseek-ai/dsh-client-ui-sidebar-files": ["./packages/client/ui-sidebar-files/src"],
       "@deepseek-ai/dsh-client-ui-sidebar-files/client": ["./packages/client/ui-sidebar-files/src/client"],
+      "@deepseek-ai/dsh-client-ui-sidebar-experiment": ["./packages/client/ui-sidebar-experiment/src"],
+      "@deepseek-ai/dsh-client-ui-sidebar-experiment/client": ["./packages/client/ui-sidebar-experiment/src/client"],
       "@deepseek-ai/dsh-client-store": ["./packages/client/store/src/index.ts"],
       "@deepseek-ai/dsh-client-ui-renderer": ["./packages/client/ui-renderer/src"],
       "@deepseek-ai/dsh-client-ui-renderer/client": ["./packages/client/ui-renderer/src/client"],

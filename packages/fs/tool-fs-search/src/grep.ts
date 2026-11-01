@@ -11,6 +11,7 @@
  * @module @deepseek-ai/dsh-tool-fs-search/grep
  */
 
+import { sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, SearchResultView, ToolResult } from '@deepseek-ai/dsh-tools'
@@ -105,7 +106,7 @@ export function parseGrepArgs(args: { pattern: string; path?: string; include?: 
  * {@link GrepInput.include}) is a plain argv element — no shell layer exists,
  * so no quoting applies; the pattern and include ride in `--flag=value` form
  * and the target behind `--`, so a leading-dash value can never be parsed as
- * a flag.
+ * a flag. An omitted target searches `.` so an empty file set returns no matches.
  *
  * @param input - the validated arguments.
  * @returns the complete ripgrep argument vector (excluding the binary itself).
@@ -113,7 +114,7 @@ export function parseGrepArgs(args: { pattern: string; path?: string; include?: 
 export function buildGrepCommand(input: GrepInput): string[] {
   const parts = ['--json', `--regexp=${input.pattern}`]
   if (input.include !== undefined) parts.push(`--glob=${input.include}`)
-  if (input.path !== undefined) parts.push('--', input.path)
+  parts.push('--', input.path ?? '.')
   return parts
 }
 
@@ -328,7 +329,7 @@ export function applyGrepTool(ctx: Context, caps: GrepToolCaps): void {
       const all: GrepMatch[] = []
       for (const raw of parseGrepMatches(run.stdout)) {
         const match: GrepMatch = {
-          path: toWorkdirRelative(raw.path, run.workdir),
+          path: toWorkdirRelative(input.path === undefined && raw.path.startsWith(`.${sep}`) ? raw.path.slice(2) : raw.path, run.workdir),
           lineNumber: raw.lineNumber,
           line: raw.line,
         }

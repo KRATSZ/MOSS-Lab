@@ -1,0 +1,50 @@
+---
+description: "在右侧栏打开实验动画入口并查看当前可用状态。"
+kind: "package-reference"
+---
+
+# @deepseek-ai/dsh-client-ui-sidebar-experiment
+
+[English](README.md) | 中文
+
+## 概述
+
+当前会话的检查预览可用后，**实验动画**会自动打开并开始播放。也可从右侧栏引导页打开，或选择**查看演示**体验明确标识的演示数据。
+
+## 目录
+
+- [实现](#implementation)
+- [模型体验](#model-experience)
+- [已知限制与后续工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
+
+-----
+
+<a id="implementation"></a>
+## 实现
+
+客户端每隔五秒检查当前会话的同源预览状态，每个新的检查任务自动打开一次；用户选择**重新检查**时再次检查。演示模式使用 `/api/experiment-demo` 和固定会话 `demo`，真实实验使用 `/api/experiment-preview`。两者均读取所选版本和任务的有限资源，再次确认状态后在沙盒框架中渲染。**查询机器人状态**单独发起一次只读请求，显示可用设备信息及查询时间。
+
+<a id="model-experience"></a>
+## 模型体验
+
+无，本包只显示侧栏入口，不注册模型可见内容。
+
+#### KV 缓存影响
+
+无；页面不组装模型请求。
+
+## 已知限制与后续工作
+
+<a id="known-limitations-and-deferred-work"></a>
+- **实验集成。** 播放需要可用的已检查预览；设备运行和小智未接入此页面。
+
+<a id="dev-note"></a>
+### 开发备注
+
+<details>
+<summary>维护者工作上下文 — 点击展开</summary>
+
+无。
+
+</details>

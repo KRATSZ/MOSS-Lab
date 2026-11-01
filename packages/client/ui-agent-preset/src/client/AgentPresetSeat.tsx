@@ -22,7 +22,7 @@ import {
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { AgentPresetSeatState } from './seat-store.ts'
 import { presetDisplayText } from './locales.ts'
-import { requiresCodingTools } from './settings-store.ts'
+import { isSelectablePreset } from './settings-store.ts'
 import css from './AgentPresetSeat.module.css'
 
 /** Registration-side business face for the hero chip. */
@@ -103,7 +103,7 @@ export function AgentPresetSeat({
   }, [load])
 
   const options = useMemo(
-    () => state.options.filter(option => developerTools || !requiresCodingTools(option)),
+    () => state.options.filter(isSelectablePreset),
     [state.options, developerTools],
   )
 
@@ -202,6 +202,7 @@ export function AgentPresetSeat({
           </button>
         )}
       />}
+      {ready && !isSelectablePreset({ id: state.current }) && <span role="alert">{t('legacyDefaultWarning')}</span>}
       {toast !== null && (
         <Toast
           key={toast.seq}

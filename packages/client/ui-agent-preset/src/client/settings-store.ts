@@ -54,6 +54,11 @@ export function requiresCodingTools(preset: AgentPresetOption | undefined): bool
   return preset !== undefined && isBuiltInPreset(preset) && (preset.id === 'ptc' || preset.id === 'minimal')
 }
 
+/** Restrict new tasks to the supported modes. */
+export function isSelectablePreset(preset: AgentPresetOption): boolean {
+  return preset.id === 'chat' || preset.id === 'standard'
+}
+
 /** One roster entry exactly as the host reports it. */
 export type RosterPreset = AgentPresetRoster['presets'][number]
 

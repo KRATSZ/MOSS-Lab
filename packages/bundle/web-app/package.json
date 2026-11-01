@@ -113,6 +113,7 @@
     "@deepseek-ai/dsh-client-ui-sidebar-browser": "workspace:*",
     "@deepseek-ai/dsh-client-ui-sidebar-documentpreview": "workspace:*",
     "@deepseek-ai/dsh-client-ui-sidebar-files": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-sidebar-experiment": "workspace:*",
     "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:*",
     "@deepseek-ai/dsh-client-ui-sidebar-terminal": "workspace:*",
     "@deepseek-ai/dsh-client-ui-skill": "workspace:*",

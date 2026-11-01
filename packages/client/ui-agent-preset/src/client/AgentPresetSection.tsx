@@ -2,13 +2,13 @@
 import type { ReactNode } from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
-  Button, IconBrowseOutlineRegular, IconPlusOutlineRegular, Modal, Tag, Tooltip,
+  Button, IconBrowseOutlineRegular, Modal, Tag, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AgentPresetSectionState } from './section-store.ts'
 import { isBuiltInPreset, presetDisplayText } from './locales.ts'
-import { requiresCodingTools } from './settings-store.ts'
+import { isSelectablePreset } from './settings-store.ts'
 import { PresetGuideDialog, presetGuide, trapPresetReaderTab, type PresetGuidePage } from './PresetGuideDialog.tsx'
 import css from './AgentPresetSection.module.css'
 
@@ -19,8 +19,6 @@ export interface AgentPresetSectionInjected {
     /** Shared Coding Tools preference; off hides the built-in PTC and Minimal cards. */
     developerTools: ObservableSnapshot<boolean>
   }
-  /** Stage the `cordis` preset and start a Creator-mode task; absent without a conversation flow. */
-  startCreatorDraft?: () => void
   load: () => Promise<void>
   /** Open one preset's declared composition in the read-only viewer. */
   view: (id: string) => Promise<void>
@@ -62,11 +60,9 @@ function CardDescription({ text }: { text: string }): ReactNode {
  * @returns The preset settings section.
  */
 export function AgentPresetSection({
-  useAgentPresetSection, load, view, closeView, makeDefault, startCreatorDraft,
-  close: closeSettings, useDeveloperTools, t,
+  useAgentPresetSection, load, view, closeView, makeDefault, t,
 }: AgentPresetSectionProps) {
   const state = useAgentPresetSection(value => value)
-  const developerTools = useDeveloperTools(enabled => enabled)
   const [guide, setGuide] = useState<{
     content: NonNullable<ReturnType<typeof presetGuide>>
     page: PresetGuidePage
@@ -80,33 +76,13 @@ export function AgentPresetSection({
   const viewed = state.view
   const viewedRow = viewed === null ? undefined : state.rows.find(row => row.id === viewed.id)
   const viewedTitle = viewed === null ? '' : viewedRow === undefined ? viewed.title : presetDisplayText(viewedRow, t).name
-  // Creator mode authors presets in conversation; it needs the flow to land a
-  // session in and the self-referential preset on the roster.
-  const creator = startCreatorDraft !== undefined && state.rows.some(row => row.id === 'cordis') ? startCreatorDraft : undefined
-  /* The custom group is where a preset of one's own appears, so its entry
-     stays on screen even while the group is empty. */
-  const creatorButton = creator === undefined
-    ? null
-    : (
-      <button
-        type="button"
-        className={css.creatorButton}
-        disabled={state.saving}
-        onClick={() => { creator(); closeSettings() }}
-      >
-        <IconPlusOutlineRegular size={14} />
-        {t('creatorDraft')}
-      </button>
-    )
   return <section className={css.section}>
     <h2 className={css.title}>{t('nav')}</h2>
     <p className={css.intro}>{t('sectionIntro')}</p>
     {state.error === null ? null : <p className={css.error} role="alert">{state.error}</p>}
     {([true, false] as const).map((builtIn) => {
-      const rows = state.rows.filter(row => isBuiltInPreset(row) === builtIn
-        && (developerTools || !requiresCodingTools(row)))
-      const entry = builtIn ? null : creatorButton
-      if (rows.length === 0 && entry === null) return null
+      const rows = state.rows.filter(row => isBuiltInPreset(row) === builtIn && isSelectablePreset(row))
+      if (rows.length === 0) return null
       return <section key={String(builtIn)} className={css.group}>
         <h3 className={css.groupHead}>{t(builtIn ? 'builtInGroup' : 'customGroup')}</h3>
         {rows.length === 0 ? null : <ul className={css.cards}>
@@ -156,7 +132,6 @@ export function AgentPresetSection({
             </li>
           })}
         </ul>}
-        {entry}
       </section>
     })}
     {guide === null ? null : <PresetGuideDialog guide={guide.content} initialPage={guide.page} t={t} onClose={() => { setGuide(null) }} />}

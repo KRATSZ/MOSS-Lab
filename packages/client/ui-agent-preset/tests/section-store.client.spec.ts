@@ -128,7 +128,7 @@ describe('Coding Tools default reconciliation', () => {
     return { ...f, rows: () => rows, setRows: (next: AgentPresetRow[]) => { rows = next } }
   }
 
-  it.each(['ptc', 'minimal'])('saves Standard instead of built-in %s with the accepted revision', async (id) => {
+  it.each(['ptc', 'minimal', 'cordis', 'custom'])('saves Standard instead of hidden %s with the accepted revision', async (id) => {
     const f = setup(id)
     await f.controller.reconcileCodingTools(() => true)
     expect(f.remote.settings.update).toHaveBeenCalledExactlyOnceWith('agent-preset-registry', { selectedDefault: 'standard' }, 7)
@@ -138,7 +138,7 @@ describe('Coding Tools default reconciliation', () => {
     expect(f.remote.settings.update).toHaveBeenCalledOnce()
   })
 
-  it.each([['standard', undefined], ['cordis', undefined], ['custom', 'Custom'], ['ptc', 'My PTC'], ['minimal', 'My Minimal']] as const)(
+  it.each([['standard', undefined], ['chat', undefined]] as const)(
     'preserves the allowed default %s (%s)', async (id, name) => {
       const f = setup(id, name)
       await f.controller.reconcileCodingTools(() => true)

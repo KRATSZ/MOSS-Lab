@@ -1,77 +1,61 @@
-# DeepSeek Harness
+# MOSS Lab
 
 English | [中文](README.zh.md)
 
-DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
+MOSS Lab brings a web-based AI agent, local Opentrons protocol simulation, and interactive Flex 3D previews together in one project. It builds on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) and includes a source snapshot of [LabscriptAI OT](https://github.com/KRATSZ/labscriptai-ot).
 
-It is built on an **everything-is-a-plugin** architecture and powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512).
+> **Project status:** Experimental. A simulation or animation does not establish experimental accuracy, device readiness, or physical safety. The robot status button only reads device information; this integration does not initiate robot runs.
 
-Documentation: [https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
+## Features
 
-## Developer preview
+- Use Agent mode for executable tasks and Research mode for conversation and investigation.
+- Draft and analyze Opentrons protocols locally, then inspect a Flex 3D animation in the web interface.
+- Delegate tasks through a configured Xiaozhi MCP connection and follow their status.
+- Query supported robot health and instrument endpoints on request.
 
-DeepSeek Harness is in _developer preview_ and iterating rapidly. **THERE WILL BE COMPATIBILITY-BREAKING CHANGES.**
+## Requirements
 
-Review the [safety notice](SAFETY.md) before running the project.
+- Node.js 24.9 or later and pnpm 11.28.5.
+- [uv](https://docs.astral.sh/uv/) and Python 3.11–3.13.
+- An OpenAI Chat Completions-compatible HTTPS model endpoint and credentials.
+- A Xiaozhi MCP WSS endpoint for the current launch configuration; a compatible robot service is optional.
 
-## Run
+## Getting started
 
-### Run from `npm`
-
-Install `Node.js`, then run:
-
-```sh
-npx @deepseek-ai/dsh web
-```
-
-The command starts the Web UI at `http://127.0.0.1:3080` by default and opens it in the default browser for a local launch. An SSH launch only prints the host URL because the SSH client or editor owns the local forwarded address. Pass `--no-open` to run the server without opening a browser. See [Web UI guide](docs/user/guide/index.md).
-
-### Run from source
-
-To run from a repository checkout:
+From the repository root, install dependencies and build the web application:
 
 ```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
 pnpm install
 pnpm run build
-pnpm dsh web
+uv sync --project labscriptai-ot --locked
 ```
 
-`pnpm run build` prepares the repository artifacts. `pnpm dsh web` uses those built artifacts without rebuilding.
+Copy `.env.example` to `.env` and fill in the required values. The WSS address and model key are credentials; keep the file private. `OPENTRONS_URL` is optional and must point to a service that supports `GET /health` and `GET /instruments`.
 
-## Community and support
-
-- Submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
-- Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repository for discoverability.
-- Join <a href="https://discord.gg/4MrtZUhpxg">DeepSeek Harness Discord community</a>.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Development
-
-Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
-
-`pnpm run dev:web` builds, serves, and rebuilds client bundles on source edits in one terminal, and `make help` lists the matching Make targets for Web and Desktop; the guide's application commands section owns the full table.
-
-For agents, follow [AGENTS.md](AGENTS.md).
-
-## Citation
-
-```bibtex
-@misc{deepseek-harness2026,
-  title={DeepSeek Harness: Everything is a Plugin},
-  author={DeepSeek-AI},
-  year={2026},
-  publisher={GitHub},
-  howpublished={\url{https://github.com/deepseek-ai/deepseek-harness}},
-}
+```sh
+cp .env.example .env
+node moss-start.mjs
 ```
+
+Open the authentication URL printed by the launcher. Local sessions, experiment records, and generated previews are stored in `.dsh-local/`. See [MOSS Lab setup and migration](MOSS-LAB.md) for details.
+
+## Project layout
+
+- `moss-start.mjs` and `moss-model.patch.yml` start and configure the web agent.
+- `internal/` contains the experiment, preview, robot status, and Xiaozhi integration.
+- `labscriptai-ot/` contains the robot source, simulation dependencies, and Flex3D assets.
+- `packages/`, `apps/`, and `vendor/` contain DeepSeek Harness components and their dependencies.
+
+## Sources and citation
+
+MOSS Lab builds on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) by DeepSeek AI and [LabscriptAI OT](https://github.com/KRATSZ/labscriptai-ot). The included LabscriptAI OT snapshot is based on commit `a3182eb5befc8ce535c33a225ae80b287e87c211`, with local viewer changes.
+
+Use of LabscriptAI OT requires the following citation:
+
+> Gao, Yuan et al. “Autonomous Liquid-handling Robotics Scripting for Accessible and Responsible Protein Engineering.” bioRxiv, 2025. [doi:10.1101/2025.09.30.679666](https://doi.org/10.1101/2025.09.30.679666).
+
+See [LabscriptAI OT citation metadata](labscriptai-ot/CITATION.cff) and [DeepSeek Harness citation](https://github.com/deepseek-ai/deepseek-harness#citation).
 
 ## License
 
-[MIT](LICENSE)
-
-Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+This repository contains components with different licenses. DeepSeek Harness is covered by the [MIT license](LICENSE). Code and assets under `labscriptai-ot/` retain the [LabscriptAI Research Citation License v1.0](labscriptai-ot/LICENSE), which requires citation and written permission for commercial use; it is not an OSI-approved open-source license. The bundled protocol library contains third-party examples whose individual redistribution terms have not been verified. Review the applicable component licenses and [third-party notices](THIRD_PARTY_NOTICES.md) before redistribution or use.

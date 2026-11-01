@@ -45,7 +45,9 @@ export function apply(ctx: ClientContext): void {
   // switch re-resolves shipped names; user-authored metadata passes through.
   const agentPresetCopy = ctx.locale.bind('settings.agentPreset')
   const presetName: PluginInventorySettingsTabInjected['presetName'] = preset =>
-    presetDisplayText(preset, agentPresetCopy).name
+    preset.id === 'chat' && preset.name === undefined
+      ? agentPresetCopy('presetChatName')
+      : presetDisplayText(preset, agentPresetCopy).name
   const injected = (): PluginInventorySettingsTabInjected => ({
     list, presetName,
     resolveText: text => ctx.locale.resolveText(text),

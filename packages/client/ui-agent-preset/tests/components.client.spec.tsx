@@ -25,14 +25,14 @@ afterEach(cleanup)
 const ROSTER_READY: AgentPresetSettingsState = {
   status: 'ready',
   error: null,
-  options: [{ id: 'standard' }, { id: 'mine' }],
+  options: [{ id: 'standard' }, { id: 'chat', name: 'mine' }],
 }
 
 const SEAT_READY: AgentPresetSeatState = {
   current: 'standard',
   options: [
     { id: 'standard' },
-    { id: 'mine' },
+    { id: 'chat', name: 'mine' },
   ],
   busy: false,
   error: null,
@@ -100,25 +100,19 @@ function renderLabel(
 }
 
 describe('the new-session chip', () => {
-  it.each([false, true])('offers Standard, Creator and custom presets with Developer tools %s', (enabled) => {
+  it.each([false, true])('offers chat and execute while hiding legacy modes with Developer tools %s', (enabled) => {
     const actions = renderSeat({ options: [
-      { id: 'standard' }, { id: 'ptc' }, { id: 'minimal' }, { id: 'cordis' }, { id: 'mine' },
+      { id: 'chat' }, { id: 'standard' }, { id: 'ptc' }, { id: 'minimal' }, { id: 'cordis' }, { id: 'mine' },
     ] }, undefined, undefined, enabled)
-
     fireEvent.click(screen.getByRole('button'))
-    expect(screen.getAllByRole('menuitem')).toHaveLength(enabled ? 5 : 3)
-    expect(screen.getByRole('menuitem', { name: /^Standard mode/ })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: /^mine/ })).toBeTruthy()
-    expect(screen.queryByRole('menuitem', { name: /^PTC mode/ }) !== null).toBe(enabled)
-    expect(screen.queryByRole('menuitem', { name: /^Minimal mode/ }) !== null).toBe(enabled)
-    fireEvent.click(screen.getByRole('menuitem', { name: /^Creator mode/ }))
-    expect(actions.select).toHaveBeenCalledWith('cordis')
+    expect(screen.getAllByRole('menuitem')).toHaveLength(2)
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Research/ }))
+    expect(actions.select).toHaveBeenCalledWith('chat')
   })
 
-  it('keeps a named custom preset that overrides a development preset id', () => {
-    renderSeat({ options: [{ id: 'ptc', name: 'My workflow' }] }, undefined, undefined, false)
-    fireEvent.click(screen.getByRole('button'))
-    expect(screen.getByRole('menuitem', { name: /^My workflow/ })).toBeTruthy()
+  it('warns before starting a task in a hidden legacy mode', () => {
+    renderSeat({ current: 'cordis', options: [{ id: 'cordis' }, { id: 'standard' }] })
+    expect(screen.getByRole('alert').textContent).toBe(en.legacyDefaultWarning)
   })
 
   it('keeps the current mode visible without opening a picker when all options are hidden', () => {
@@ -132,7 +126,7 @@ describe('the new-session chip', () => {
   })
 
   it('closes a picker when its last visible option disappears and keeps it closed when options return', () => {
-    const options = [{ id: 'minimal' }, { id: 'mine' }]
+    const options = [{ id: 'minimal' }, { id: 'chat', name: 'mine' }]
     const actions = renderSeat({ current: 'minimal', options }, undefined, undefined, false)
     const trigger = screen.getByRole<HTMLButtonElement>('button', { name: en.presetMinimalName })
     fireEvent.click(trigger)
@@ -195,7 +189,7 @@ describe('the new-session chip', () => {
   })
 
   it('falls back to the id when the staged preset published no name', () => {
-    renderSeat({ current: 'mine' })
+    renderSeat({ current: 'chat' })
 
     expect(screen.getByRole('button').textContent).toContain('mine')
   })
@@ -212,7 +206,7 @@ describe('the new-session chip', () => {
 
     fireEvent.click(screen.getByText('mine'))
 
-    expect(actions.select).toHaveBeenCalledWith('mine')
+    expect(actions.select).toHaveBeenCalledWith('chat')
     expect(screen.getByRole('button').getAttribute('aria-expanded')).toBe('false')
   })
 
@@ -288,7 +282,7 @@ describe('a refused switch', () => {
     fireEvent.click(screen.getByRole('button'))
     fireEvent.click(screen.getByRole('menuitem', { name: /mine/ }))
 
-    await waitFor(() => { expect(actions.select).toHaveBeenCalledWith('mine') })
+    await waitFor(() => { expect(actions.select).toHaveBeenCalledWith('chat') })
     expect(screen.queryByRole('alert')).toBeNull()
   })
 })

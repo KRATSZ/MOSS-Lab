@@ -7,12 +7,15 @@ export type AgentPresetSettingsKey =
   | PresetGuideKey
   | 'builtInGroup'
   | 'customGroup'
+  | 'legacyDefaultWarning'
   | 'seatHint'
   | 'headerHint'
   | 'nav'
   | 'sectionIntro'
   | 'setDefault'
   | 'view'
+  | 'presetChatName'
+  | 'presetChatDescription'
   | 'presetStandardName'
   | 'presetStandardDescription'
   | 'presetPtcName'
@@ -38,8 +41,9 @@ export type AgentPresetSettingsKey =
 export const en: Record<AgentPresetSettingsKey, string> = {
   ...guideEn,
   builtInGroup: 'Built-in', customGroup: 'Custom',
-  sectionIntro: 'Choose the agent’s tools and how it works. Use Standard mode for everyday tasks, or Creator mode to add capabilities to DSH.',
+  sectionIntro: 'Choose a mode for new tasks: Research mode to investigate and discuss, or Agent mode for tasks using tools.',
 
+  legacyDefaultWarning: 'This task uses a legacy mode. Choose Research or Agent mode before starting.',
   seatHint: 'Choose the agent preset for your new task',
   headerHint: 'The agent preset chosen when this task started',
   nav: 'Agent presets',
@@ -47,7 +51,9 @@ export const en: Record<AgentPresetSettingsKey, string> = {
   setDefault: 'Set as new task default',
   view: 'View configuration',
 
-  presetStandardName: 'Standard mode',
+  presetChatName: 'Research mode',
+  presetChatDescription: 'Investigate and discuss without execution tools.',
+  presetStandardName: 'Agent mode',
   presetStandardDescription:
     'Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed.',
   presetPtcName: 'PTC mode',
@@ -66,7 +72,7 @@ export const en: Record<AgentPresetSettingsKey, string> = {
   brokenBadge: 'Failed to load',
 
   switchRefused: 'Could not switch to {name}: {reason}',
-  standardUnavailable: 'Standard mode is unavailable. Restore it or choose another available mode.',
+  standardUnavailable: 'Agent mode is unavailable. Restore it or choose another available mode.',
 
   close: 'Close',
 
@@ -83,8 +89,9 @@ export const en: Record<AgentPresetSettingsKey, string> = {
 export const zh: Record<AgentPresetSettingsKey, string> = {
   ...guideZh,
   builtInGroup: '内置', customGroup: '自定义',
-  sectionIntro: '选择 Agent 的工具和工作方式。日常任务用「标准模式」，扩展 DSH 的能力用「创造模式」。',
+  sectionIntro: '选择新任务的模式：调研模式适合调研和讨论，Agent 模式适合使用工具完成任务。',
 
+  legacyDefaultWarning: '当前任务使用旧模式，请在开始前选择调研模式或 Agent 模式',
   seatHint: '选择新任务使用的 Agent 预设',
   headerHint: '本任务的 Agent 预设，在任务开始时确定',
   nav: 'Agent 预设',
@@ -92,7 +99,9 @@ export const zh: Record<AgentPresetSettingsKey, string> = {
   setDefault: '设为新任务默认',
   view: '查看配置',
 
-  presetStandardName: '标准模式',
+  presetChatName: '调研模式',
+  presetChatDescription: '调研与讨论，不使用执行工具。',
+  presetStandardName: 'Agent 模式',
   presetStandardDescription: '处理代码、文件和资料，适合大多数任务。Agent 会按需使用检索、编辑和终端等工具。',
   presetPtcName: 'PTC 模式',
   presetPtcDescription: '包含标准模式的所有能力，更适合批量调用工具，并对结果进行筛选、整理、去重、统计或汇总的任务。',
@@ -107,7 +116,7 @@ export const zh: Record<AgentPresetSettingsKey, string> = {
   brokenBadge: '加载失败',
 
   switchRefused: '无法切换到「{name}」：{reason}',
-  standardUnavailable: '标准模式不可用，请恢复该模式或选择其他可用模式。',
+  standardUnavailable: 'Agent 模式不可用，请恢复该模式或选择其他可用模式。',
 
   close: '关闭',
 
@@ -123,7 +132,19 @@ export const zh: Record<AgentPresetSettingsKey, string> = {
 // The resolution itself is the shared fold in `dsh-agent-preset-registry/display`,
 // re-exported here so every surface in this plugin reads one path; the
 // Settings plugin list inlines the same fold over this plugin's dictionaries.
-export { isBuiltInPreset, presetDisplayText } from '@deepseek-ai/dsh-agent-preset-registry/display'
+import { isBuiltInPreset as isRegistryBuiltInPreset, presetDisplayText as registryDisplayText } from '@deepseek-ai/dsh-agent-preset-registry/display'
+import type { PresetDisplaySource, PresetDisplayText } from '@deepseek-ai/dsh-agent-preset-registry/display'
+
+export function isBuiltInPreset(preset: PresetDisplaySource): boolean {
+  return (preset.id === 'chat' && preset.name === undefined) || isRegistryBuiltInPreset(preset)
+}
+
+export function presetDisplayText(preset: PresetDisplaySource, t: (key: AgentPresetSettingsKey) => string): PresetDisplayText {
+  if (preset.id === 'chat' && preset.name === undefined) {
+    return { name: t('presetChatName'), description: t('presetChatDescription') }
+  }
+  return registryDisplayText(preset, t)
+}
 export type { PresetDisplaySource, PresetDisplayText } from '@deepseek-ai/dsh-agent-preset-registry/display'
 
 /** Japanese copy, checked against the English keys. */
@@ -131,13 +152,16 @@ export const ja = {
   ...guideJa,
   'builtInGroup': '組み込み',
   'customGroup': 'カスタム',
-  'sectionIntro': 'エージェントのツールと動作を選択します。日々のタスクには標準モードを、DSH に機能を追加するにはクリエイターモードを使用してください。',
+  'sectionIntro': '新しいタスクには、調査・検討用のリサーチモードか、ツールを使うエージェントモードを選択します。',
+  'legacyDefaultWarning': 'このタスクは旧モードです。開始前にリサーチモードかエージェントモードを選択してください。',
   'seatHint': '新しいタスクで使用するエージェントプリセットを選択',
   'headerHint': 'このタスクの開始時に選択されたエージェントプリセット',
   'nav': 'エージェントプリセット',
   'setDefault': '新しいタスクの既定に設定',
   'view': '設定を表示',
-  'presetStandardName': '標準モード',
+  'presetChatName': 'リサーチモード',
+  'presetChatDescription': '実行ツールを使わずに調査・検討します。',
+  'presetStandardName': 'エージェントモード',
   'presetStandardDescription': 'コード、ファイル、情報を扱います。検索、編集、ターミナルコマンドなどのツールを必要に応じて利用でき、ほとんどのタスクに適しています。',
   'presetPtcName': 'PTC モード',
   'presetPtcDescription': '標準モードのすべての機能を含みます。ツールを一括で呼び出し、その結果を絞り込み、整理、重複排除、集計、要約するタスクに適しています。',
@@ -149,7 +173,7 @@ export const ja = {
   'noDescription': '説明はありません。',
   'brokenBadge': '読み込みに失敗',
   'switchRefused': '{name} に切り替えられませんでした: {reason}',
-  'standardUnavailable': '標準モードは利用できません。復元するか、利用可能な別のモードを選択してください。',
+  'standardUnavailable': 'エージェントモードは利用できません。復元するか、利用可能な別のモードを選択してください。',
   'close': '閉じる',
   'creatorDraft': 'エージェントにプリセット作成を手伝ってもらう',
   'createPlugin': 'エージェントにプラグインを作成してもらう',
@@ -163,8 +187,9 @@ export const ja = {
 export const es = {
   ...guideEs,
   builtInGroup: 'Incorporado', customGroup: 'personalizado',
-  sectionIntro: 'Elija las herramientas del agente y cómo funciona. Utilice el modo Estándar para las tareas diarias o el modo Creador para agregar capacidades a DSH.',
+  sectionIntro: 'Elija el modo investigación para investigar y debatir, o el modo agente para tareas con herramientas.',
 
+  legacyDefaultWarning: 'Esta tarea usa un modo anterior. Elija Investigación o Modo agente antes de empezar.',
   seatHint: 'Elija el agente preestablecido para su nueva tarea',
   headerHint: 'El agente preestablecido elegido cuando comenzó esta tarea',
   nav: 'Ajustes preestablecidos del agente',
@@ -172,7 +197,9 @@ export const es = {
   setDefault: 'Establecer como nueva tarea predeterminada',
   view: 'Ver configuración',
 
-  presetStandardName: 'Modo estándar',
+  presetChatName: 'Modo investigación',
+  presetChatDescription: 'Investigue y debata sin herramientas de ejecución.',
+  presetStandardName: 'Modo agente',
   presetStandardDescription:
     'Trabaje con código, archivos e información. Adecuado para la mayoría de las tareas, con búsqueda, edición, comandos de terminal y otras herramientas disponibles según sea necesario.',
   presetPtcName: 'Modo PTC',
@@ -191,7 +218,7 @@ export const es = {
   brokenBadge: 'No se pudo cargar',
 
   switchRefused: 'No se pudo cambiar a {name}: {reason}',
-  standardUnavailable: 'El modo estándar no está disponible. Restáuralo o elige otro modo disponible.',
+  standardUnavailable: 'El modo agente no está disponible. Restáuralo o elige otro modo disponible.',
 
   close: 'Cerrar',
 
@@ -208,8 +235,9 @@ export const es = {
 export const fr = {
   ...guideFr,
   builtInGroup: 'Intégré', customGroup: 'Personnalisé',
-  sectionIntro: 'Choisissez les outils de l’agent et son fonctionnement. Utilisez le mode Standard pour les tâches quotidiennes ou le mode Créateur pour ajouter des fonctionnalités à DSH.',
+  sectionIntro: 'Choisissez le mode recherche pour investiguer et discuter, ou le mode agent pour utiliser des outils.',
 
+  legacyDefaultWarning: 'Cette tâche utilise un ancien mode. Choisissez Recherche ou Mode agent avant de commencer.',
   seatHint: "Choisissez le préréglage d'agent pour votre nouvelle tâche",
   headerHint: "Le préréglage d'agent choisi au démarrage de cette tâche",
   nav: "Préréglages d'agent",
@@ -217,7 +245,9 @@ export const fr = {
   setDefault: 'Définir comme nouvelle tâche par défaut',
   view: 'Afficher la configuration',
 
-  presetStandardName: 'Mode standard',
+  presetChatName: 'Mode recherche',
+  presetChatDescription: 'Investiguez et discutez sans outils d’exécution.',
+  presetStandardName: 'Mode agent',
   presetStandardDescription:
     'Travaillez avec du code, des fichiers et des informations. Convient à la plupart des tâches, avec recherche, édition, commandes de terminal et autres outils disponibles selon les besoins.',
   presetPtcName: 'Mode PTC',
@@ -236,7 +266,7 @@ export const fr = {
   brokenBadge: 'Échec du chargement',
 
   switchRefused: 'Impossible de passer à {name} : {reason}',
-  standardUnavailable: "Le mode standard n'est pas disponible. Restaurez-le ou choisissez un autre mode disponible.",
+  standardUnavailable: "Le mode agent n'est pas disponible. Restaurez-le ou choisissez un autre mode disponible.",
 
   close: 'Fermer',
 
@@ -253,8 +283,9 @@ export const fr = {
 export const de = {
   ...guideDe,
   builtInGroup: 'Eingebaut', customGroup: 'Benutzerdefiniert',
-  sectionIntro: 'Wählen Sie die Tools des Agenten und deren Funktionsweise aus. Verwenden Sie den Standardmodus für alltägliche Aufgaben oder den Creator-Modus, um DSH Funktionen hinzuzufügen.',
+  sectionIntro: 'Wählen Sie den Recherche-Modus für Untersuchungen und Diskussionen oder den Agent-Modus für Aufgaben mit Werkzeugen.',
 
+  legacyDefaultWarning: 'Diese Aufgabe verwendet einen alten Modus. Wählen Sie vor dem Start Recherche-Modus oder Agent-Modus.',
   seatHint: 'Wählen Sie die Agentenvoreinstellung für Ihre neue Aufgabe',
   headerHint: 'Die Agentenvoreinstellung, die beim Start dieser Aufgabe ausgewählt wurde',
   nav: 'Agentenvoreinstellungen',
@@ -262,7 +293,9 @@ export const de = {
   setDefault: 'Als Standard für neue Aufgabe festlegen',
   view: 'Konfiguration anzeigen',
 
-  presetStandardName: 'Standardmodus',
+  presetChatName: 'Recherche-Modus',
+  presetChatDescription: 'Untersuchen und diskutieren Sie ohne Ausführungswerkzeuge.',
+  presetStandardName: 'Agent-Modus',
   presetStandardDescription:
     'Arbeiten Sie mit Code, Dateien und Informationen. Geeignet für die meisten Aufgaben, da bei Bedarf Suche, Bearbeitung, Terminalbefehle und andere Tools verfügbar sind.',
   presetPtcName: 'PTC-Modus',
@@ -281,7 +314,7 @@ export const de = {
   brokenBadge: 'Laden fehlgeschlagen',
 
   switchRefused: 'Konnte nicht zu {name} wechseln: {reason}',
-  standardUnavailable: 'Der Standardmodus ist nicht verfügbar. Stellen Sie es wieder her oder wählen Sie einen anderen verfügbaren Modus.',
+  standardUnavailable: 'Der Agent-Modus ist nicht verfügbar. Stellen Sie ihn wieder her oder wählen Sie einen anderen verfügbaren Modus.',
 
   close: 'Schließen',
 
@@ -298,8 +331,9 @@ export const de = {
 export const ru = {
   ...guideRu,
   builtInGroup: 'Встроенный', customGroup: 'Пользовательский',
-  sectionIntro: 'Выбирайте инструменты агента и то, как они работают. Используйте стандартный режим для повседневных задач или режим Creator, чтобы расширить возможности DSH.',
+  sectionIntro: 'Выберите режим исследования для изучения и обсуждения или режим агента для задач с инструментами.',
 
+  legacyDefaultWarning: 'Задача использует старый режим. Перед началом выберите режим исследования или режим агента.',
   seatHint: 'Выберите предустановку агента для вашей новой задачи',
   headerHint: 'Предварительная настройка агента, выбранная при запуске этой задачи',
   nav: 'Настройки агента',
@@ -307,7 +341,9 @@ export const ru = {
   setDefault: 'Установить в качестве новой задачи по умолчанию',
   view: 'Посмотреть конфигурацию',
 
-  presetStandardName: 'Стандартный режим',
+  presetChatName: 'Режим исследования',
+  presetChatDescription: 'Изучение и обсуждение без инструментов выполнения.',
+  presetStandardName: 'Режим агента',
   presetStandardDescription:
     'Работайте с кодом, файлами и информацией. Подходит для большинства задач, с поиском, редактированием, командами терминала и другими инструментами, доступными по мере необходимости.',
   presetPtcName: 'Режим PTC',
@@ -326,7 +362,7 @@ export const ru = {
   brokenBadge: 'Не удалось загрузить',
 
   switchRefused: 'Не удалось переключиться на {name}: {reason}',
-  standardUnavailable: 'Стандартный режим недоступен. Восстановите его или выберите другой доступный режим.',
+  standardUnavailable: 'Режим агента недоступен. Восстановите его или выберите другой доступный режим.',
 
   close: 'Закрыть',
 
@@ -343,8 +379,9 @@ export const ru = {
 export const pt = {
   ...guidePt,
   builtInGroup: 'Integrado', customGroup: 'Personalizado',
-  sectionIntro: 'Escolha as ferramentas do agente e como funciona. Use o modo Padrão para tarefas diárias ou o modo Criador para adicionar recursos ao DSH.',
+  sectionIntro: 'Escolha o modo pesquisa para investigar e discutir, ou o modo agente para tarefas com ferramentas.',
 
+  legacyDefaultWarning: 'Esta tarefa usa um modo antigo. Escolha Pesquisa ou Modo agente antes de começar.',
   seatHint: 'Escolha a predefinição de agente para sua nova tarefa',
   headerHint: 'A predefinição do agente escolhida quando esta tarefa foi iniciada',
   nav: 'Predefinições de agente',
@@ -352,7 +389,9 @@ export const pt = {
   setDefault: 'Definir como nova tarefa padrão',
   view: 'Ver configuração',
 
-  presetStandardName: 'Modo padrão',
+  presetChatName: 'Modo pesquisa',
+  presetChatDescription: 'Investigue e discuta sem ferramentas de execução.',
+  presetStandardName: 'Modo agente',
   presetStandardDescription:
     'Trabalhe com código, arquivos e informações. Adequado para a maioria das tarefas, com pesquisa, edição, comandos de terminal e outras ferramentas disponíveis conforme necessário.',
   presetPtcName: 'modo PTC',
@@ -371,7 +410,7 @@ export const pt = {
   brokenBadge: 'Falha ao carregar',
 
   switchRefused: 'Não foi possível mudar para {name}: {reason}',
-  standardUnavailable: 'O modo padrão não está disponível. Restaure-o ou escolha outro modo disponível.',
+  standardUnavailable: 'O modo agente não está disponível. Restaure-o ou escolha outro modo disponível.',
 
   close: 'Fechar',
 

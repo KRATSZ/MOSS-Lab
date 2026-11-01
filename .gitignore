@@ -1,5 +1,11 @@
 CLAUDE.local.md
 .env
+.env.*
+!.env.example
+.dsh-local/
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
 apps/desktop/.env.windows
 apps/desktop/.env.macos
 apps/desktop/*.p12
@@ -47,3 +53,4 @@ worktrees/
 .agents/worktrees/
 .typert-*/
 native/system/test/bin/
+.moss-model-*.patch.yml

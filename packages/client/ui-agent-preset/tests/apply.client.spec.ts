@@ -22,7 +22,6 @@ import type { AgentPresetSectionInjected } from '../src/client/AgentPresetSectio
 import { AgentPresetSeat } from '../src/client/AgentPresetSeat.tsx'
 import type { AgentPresetSeatInjected } from '../src/client/AgentPresetSeat.tsx'
 import { AgentPresetSeatController } from '../src/client/seat-store.ts'
-import { CreatePluginMenuItem, type CreatePluginMenuItemInjected } from '../src/client/CreatePluginMenuItem.tsx'
 import { AgentPresetSectionController } from '../src/client/section-store.ts'
 import { apply as hostApply } from '../src/index.ts'
 import type { AgentPresetRow } from '@deepseek-ai/dsh-agent-preset-registry/types'
@@ -378,46 +377,6 @@ describe('ui-agent-preset apply', () => {
     await vi.waitFor(() => { expect(slots.entries('settings.section')).toHaveLength(1) })
   })
 
-  it('binds the Add plugin menu item to the roster and Creator flow and removes it with the feature', async () => {
-    const { ctx, slots, setDeveloperTools } = await bench()
-    try {
-      slots.register({
-        name: 'root',
-        children: {
-          'settings.section': { kind: 'list', scope: 'root' },
-          conversation: { kind: 'single', scope: 'root' },
-          'plugins.add.actions': { kind: 'list', scope: 'root' },
-        },
-      } as never, () => null)
-      declareConversation(slots)
-      ctx.provide('conversation', {} as never)
-      ctx.provide('sessions', sessionsDouble(ctx, { byId: {} }) as never)
-      const uiWorkspace = uiWorkspaceDouble()
-      ctx.provide('uiWorkspace', uiWorkspace as never)
-      const feature = ctx.plugin({ inject: [...inject, 'conversation', 'sessions', 'uiWorkspace'], apply })
-      await feature.await()
-
-      const entry = slots.entries('plugins.add.actions')[0]!
-      expect(entry.component).toBe(CreatePluginMenuItem)
-      const action: Partial<CreatePluginMenuItemInjected> | undefined = entry.inject?.()
-      if (action?.load === undefined || action.hooks === undefined || action.startCreatorDraft === undefined) {
-        throw new Error('expected the injected Create plugin actions')
-      }
-      await action.load()
-      expect(action.hooks.agentPresets.getSnapshot().options).toEqual([{ id: 'standard' }])
-
-      await setDeveloperTools(false)
-      action.startCreatorDraft()
-      expect(uiWorkspace.starts).toHaveLength(1)
-      expect(ctx.configForms.developerTools.enabled.getSnapshot()).toBe(false)
-
-      await feature.dispose()
-      expect(slots.entries('plugins.add.actions')).toHaveLength(0)
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-
   it('hands the section its own store, live Coding Tools preference, and default write', async () => {
     const { ctx, slots, setDeveloperTools } = await bench()
     ctx.provide('sessions', sessionsDouble(ctx, { byId: {} }) as never)
@@ -492,7 +451,7 @@ describe('ui-agent-preset apply', () => {
 
     // The directory and unbound seat reload: a section nobody opened has
     // nothing to converge, and reading the roster for it would be wasted.
-    expect(calls.length - before).toBe(2)
+    expect(calls.length - before).toBe(3)
   })
 
   it('registers the new-session chip and the header label, and drops both on disposal', async () => {
@@ -708,7 +667,7 @@ describe('ui-agent-preset apply', () => {
 
     await section.makeDefault('minimal')
 
-    expect(calls.filter(call => call === 'list')).toHaveLength(2)
+    expect(calls.filter(call => call === 'list')).toHaveLength(3)
     expect(section.hooks.agentPresetSection.getSnapshot()).toMatchObject({
       saving: false, error: 'settings write disconnected',
     })
@@ -892,7 +851,7 @@ describe('ui-agent-preset apply', () => {
     expect(b.calls.filter(call => call.startsWith('settings:'))).toEqual([])
     described.resolve(undefined)
     await vi.waitFor(() => { expect(b.ctx.configForms.developerTools.enabled.getSnapshot()).toBe(true) })
-    expect(b.calls.filter(call => call.startsWith('settings:'))).toEqual([])
+    await vi.waitFor(() => { expect(b.calls.filter(call => call.startsWith('settings:'))).toEqual(['settings:{"selectedDefault":"standard"}']) })
     await b.ctx.fiber.dispose()
   })
 
@@ -912,7 +871,7 @@ describe('ui-agent-preset apply', () => {
     await b.ctx.fiber.dispose()
   })
 
-  it.each([['standard', undefined], ['cordis', undefined], ['mine', 'Mine'], ['ptc', 'Custom PTC'], ['minimal', 'Custom Minimal']] as const)(
+  it.each([['standard', undefined], ['chat', undefined]] as const)(
     'keeps the allowed default %s (%s) when Coding Tools are disabled', async (id, name) => {
       const b = await bench({ developerToolsEnabled: false, presets: [
         { id, isDefault: true, ...(name === undefined ? {} : { name }) },
@@ -1026,7 +985,6 @@ describe('ui-agent-preset apply', () => {
     declareRoot(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const section = (b.slots.entries('settings.section')[0]!.inject as () => AgentPresetSectionInjected & Record<string, unknown>)()
-    await b.setDeveloperTools(false)
     await vi.waitFor(() => { expect(section.hooks.agentPresetSection.getSnapshot().error).toBe('settings write disconnected') })
     expect(b.calls.filter(call => call.startsWith('settings:'))).toEqual(['settings:{"selectedDefault":"standard"}'])
     expect(section.hooks.agentPresetSection.getSnapshot().rows.find(row => row.isDefault)?.id).toBe('minimal')
@@ -1050,148 +1008,7 @@ describe('ui-agent-preset apply', () => {
     expect(label.hooks.agentPresets.getSnapshot().options).toEqual([{ id: 'standard' }])
   })
 
-  it('stages the creator preset and starts a session from the section', async () => {
-    const { ctx, slots } = await bench()
-    declareRoot(slots)
-    const conversation = declareConversation(slots)
-    ctx.provide('conversation', {} as never)
-    ctx.provide('sessions', sessionsDouble(ctx, { byId: {} }) as never)
-    const uiWorkspace = uiWorkspaceDouble()
-    ctx.provide('uiWorkspace', uiWorkspace as never)
-    await ctx.plugin({ inject: [...inject, 'conversation', 'sessions', 'uiWorkspace'], apply }).await()
-    const section = (slots.entries('settings.section')[0]!.inject as unknown as () => AgentPresetSectionInjected)()
-    const injectSeat = slots.entries('conversation.hero.agentPreset')[0]!
-      .inject as unknown as (sessionId?: SessionId) => AgentPresetSeatInjected
-    const seat = injectSeat()
 
-    await section.load()
-    section.startCreatorDraft?.()
-
-    // The pick is staged on the chip's own controller — the session the
-    // workspace start produces is what the stage lands on — and exactly one
-    // new-session flow began.
-    expect(section.startCreatorDraft).toBeDefined()
-    expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('cordis')
-    expect(uiWorkspace.starts).toEqual([{ workspaceId: undefined, options: { clearPreviousDraft: false, agentPreset: 'cordis' } }])
-
-    // A cross-screen stage carries the introduce cue; the chip acknowledges
-    // it once, and a repeat acknowledgement leaves the snapshot untouched.
-    expect(seat.hooks.agentPresetSeat.getSnapshot().introduce).toBe(true)
-    seat.introduced()
-    const acknowledged = seat.hooks.agentPresetSeat.getSnapshot()
-    expect(acknowledged.introduce).toBe(false)
-    seat.introduced()
-    expect(seat.hooks.agentPresetSeat.getSnapshot()).toBe(acknowledged)
-    conversation()
-  })
-
-  it('stages Creator only on a main blank that does not list another preset', async () => {
-    const { ctx, slots, calls } = await bench()
-    declareRoot(slots)
-    const conversation = declareConversation(slots)
-    ctx.provide('conversation', {} as never)
-    const state = {
-      current: 's1',
-      byId: { s1: { id: 's1', blank: true, projectionValues: { agentPreset: 'standard' } } },
-    }
-    const sessions = sessionsDouble(ctx, state)
-    ctx.provide('sessions', sessions as never)
-    const uiWorkspace = uiWorkspaceDouble()
-    ctx.provide('uiWorkspace', uiWorkspace as never)
-    await ctx.plugin({ inject: [...inject, 'conversation', 'sessions', 'uiWorkspace'], apply }).await()
-    const section = (slots.entries('settings.section')[0]!.inject as unknown as () => AgentPresetSectionInjected)()
-    const injectSeat = slots.entries('conversation.hero.agentPreset')[0]!
-      .inject as unknown as (sessionId?: SessionId) => AgentPresetSeatInjected
-    const seat = injectSeat(SessionId('s1'))
-
-    await seat.load()
-    await section.load()
-    section.startCreatorDraft?.()
-    expect(uiWorkspace.starts).toEqual([{ workspaceId: undefined, options: { clearPreviousDraft: false, agentPreset: 'cordis' } }])
-
-    // Navigation opens another blank for Creator, so the Standard main blank is neither staged nor switched.
-    expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('standard')
-    sessions.notify()
-    await Promise.resolve()
-    expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('standard')
-    expect(calls).not.toContain('select:cordis')
-
-    // A blank whose listed preset is already Creator is staged and follows its projection.
-    state.byId.s1 = { id: 's1', blank: true, projectionValues: { agentPreset: 'cordis' } }
-    sessions.notify()
-    section.startCreatorDraft?.()
-    await vi.waitFor(() => { expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('cordis') })
-    expect(seat.hooks.agentPresetSeat.getSnapshot().introduce).toBe(true)
-    expect(calls).not.toContain('select:cordis')
-    conversation()
-  })
-
-  it.each([false, true])('keeps the bound Creator outcome when the roster load lands late (refused: %s)', async (refused) => {
-    const selection = Promise.withResolvers<undefined>()
-    const { ctx, slots, calls } = await bench({ selectGate: selection.promise })
-    declareRoot(slots)
-    const conversation = declareConversation(slots)
-    ctx.provide('conversation', {} as never)
-    const state: {
-      current?: string
-      byId: Record<string, {
-        id: string
-        blank: boolean
-        projectionValues?: { agentPreset?: string | null }
-      }>
-    } = { byId: {} }
-    const sessions = sessionsDouble(ctx, state)
-    ctx.provide('sessions', sessions as never)
-    ctx.provide('uiWorkspace', uiWorkspaceDouble() as never)
-    await ctx.plugin({ inject: [...inject, 'conversation', 'sessions', 'uiWorkspace'], apply }).await()
-    const section = (slots.entries('settings.section')[0]!.inject as unknown as () => AgentPresetSectionInjected)()
-    const injectSeat = slots.entries('conversation.hero.agentPreset')[0]!
-      .inject as unknown as (sessionId?: SessionId) => AgentPresetSeatInjected
-    const unboundSeat = injectSeat()
-
-    await section.load()
-    section.startCreatorDraft?.()
-    state.current = 's1'
-    state.byId['s1'] = { id: 's1', blank: true }
-    sessions.notify()
-    const boundSeat = injectSeat(SessionId('s1'))
-    const loading = boundSeat.load()
-    await vi.waitFor(() => { expect(calls).toContain('select:cordis') })
-    if (refused) selection.reject(new Error('Creator failed to mount'))
-    else selection.resolve(undefined)
-    await loading
-    await vi.waitFor(() => { expect(boundSeat.hooks.agentPresetSeat.getSnapshot().busy).toBe(false) })
-
-    // The chip mounts with the flow's session, so its roster load can land
-    // AFTER the stage was consumed; the session's own composition is what
-    // the display must keep — not the deployment default.
-    state.byId['s1'] = {
-      id: 's1', blank: true, projectionValues: { agentPreset: refused ? null : 'cordis' },
-    }
-    await boundSeat.load()
-
-    expect(boundSeat.hooks.agentPresetSeat.getSnapshot()).toMatchObject({
-      current: refused ? '' : 'cordis',
-      error: refused ? { preset: { id: 'cordis' }, reason: 'Creator failed to mount' } : null,
-    })
-    expect(unboundSeat.hooks.agentPresetSeat.getSnapshot().error).toBeNull()
-    boundSeat.dismissRefusal(boundSeat.hooks.agentPresetSeat.getSnapshot().error)
-    expect(boundSeat.hooks.agentPresetSeat.getSnapshot().error).toBe(refused ? 'Creator failed to mount' : null)
-    conversation()
-  })
-
-  it('offers no creator draft while the conversation flow is absent', async () => {
-    const { ctx, slots } = await bench()
-    ctx.provide('sessions', sessionsDouble(ctx, { byId: {} }) as never)
-    declareRoot(slots)
-
-    await ctx.plugin({ inject: [...inject], apply }).await()
-
-    // No conversation scope mounted: the face omits the affordance and the
-    // section hides its button rather than staging into nowhere.
-    const section = (slots.entries('settings.section')[0]!.inject as unknown as () => AgentPresetSectionInjected)()
-    expect(section.startCreatorDraft).toBeUndefined()
-  })
 })
 
 /** Official presets plus one custom preset whose id and name must not leave the Client. */

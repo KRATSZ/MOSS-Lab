@@ -1,6 +1,6 @@
 {
-  "name": "DeepSeek Harness",
-  "short_name": "DSH",
+  "name": "LabScriptAI",
+  "short_name": "LabScriptAI",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
