@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write README.md
 /moss-lab:
-  en: 785e140253e843b1
-  zh: 8c13f1cc88808052
+  en: 93796b8ac633ea4b
+  zh: f3da4f36576a1d31
 /moss-lab/features:
   en: b92e9e93b538f45b
   zh: 33f0a496e7744a0e

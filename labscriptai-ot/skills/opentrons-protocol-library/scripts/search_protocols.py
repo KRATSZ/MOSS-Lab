@@ -195,7 +195,7 @@ def extract_protocol_file_metadata(python_path: Path) -> dict[str, Any]:
 
 
 def build_protocol_document(protocol_dir: Path) -> tuple[str, dict[str, list[str]]]:
-    """Build a search document and provenance map for a protocol directory."""
+    """Build a search document and per-section source text map for a protocol directory."""
     sections: dict[str, list[str]] = {
         "directory": [protocol_dir.name],
         "readme": [],

@@ -16,7 +16,17 @@ const MAX_TEXTURES = 64
 
 type Resource = 'viewer' | 'script' | 'orbit' | 'three' | 'info' | 'analysis' | 'view' | 'asset'
 
-/** Fetch all resources without allowing unbounded responses or mixed revisions. */
+/**
+ * Download the checked resources for one preview identity and verify that the identity is still current.
+ * Reject HTTP or metadata failures, invalid textures, size limits, and identity changes during loading.
+ * @param session - session id scoping the resource requests; demo callers pass the fixed `demo` session.
+ * @param id - published experiment id from the ready status.
+ * @param revision - checked experiment revision that every resource must match.
+ * @param task - protocol-check task id that must still be current at the final status read.
+ * @param signal - caller-owned cancellation signal passed to each request; aborting rejects the promise.
+ * @param endpoint - preview route; defaults to `/api/experiment-preview`, or use `/api/experiment-demo`.
+ * @returns complete resources and PNG assets, limited to 32 MiB per resource, 64 MiB total, and 64 textures.
+ */
 export async function fetchPreviewBundle(session: string, id: string, revision: number, task: string, signal: AbortSignal, endpoint: '/api/experiment-preview' | '/api/experiment-demo' = '/api/experiment-preview'): Promise<PreviewBundle> {
   let total = 0
   async function read(resource: Resource, file?: string): Promise<Uint8Array> {
@@ -57,8 +67,9 @@ export async function fetchPreviewBundle(session: string, id: string, revision: 
   const parsed: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(view))
   if (typeof parsed !== 'object' || parsed === null || !('textures' in parsed) || !Array.isArray(parsed.textures)
     || parsed.textures.length > MAX_TEXTURES) throw new Error('Invalid preview textures')
-  const assets: Record<string, Uint8Array> = Object.create(null)
-  for (const texture of parsed.textures) {
+  const assets = Object.create(null) as Record<string, Uint8Array>
+  const textures: unknown[] = parsed.textures
+  for (const texture of textures) {
     if (typeof texture !== 'object' || texture === null || !('file' in texture) || typeof texture.file !== 'string'
       || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.png$/.test(texture.file) || texture.file === '.' || texture.file === '..') {
       throw new Error('Invalid texture filename')

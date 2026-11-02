@@ -64,6 +64,19 @@ describe('concrete terminology policy', () => {
     )).toEqual([{ file: '.agents/notes/implemented/process/current.md', line: 1 }])
   })
 
+  it('excludes nested dependency folders while still checking adjacent project files', () => {
+    for (const file of [
+      `labscriptai-ot/automation/vendor/library/${blockedTerm}.py`,
+      `labscriptai-ot/automation/flex3d/web/vendor/${blockedTerm}.js`,
+    ]) expect(findConcreteTermViolations(file, blockedTerm)).toEqual([])
+    for (const file of [
+      'labscriptai-ot/PUBLISHING.md',
+      'labscriptai-ot/automation/flex3d/sim/module_assets.py',
+      'packages/example/src/vendor-helper.ts',
+      'docs/vendor-notes.md',
+    ]) expect(findConcreteTermViolations(file, blockedTerm)).toEqual([{ file, line: 1 }])
+  })
+
   it('preserves historical identifiers only in alpha and RC release schema snapshots', () => {
     for (const channel of ['alpha', 'rc']) {
       expect(findConcreteTermViolations(

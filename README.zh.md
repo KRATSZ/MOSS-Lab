@@ -2,11 +2,7 @@
 
 [English](README.md) | 中文
 
-[![License: Mixed](https://img.shields.io/badge/License-MIT_%26_Citation-blue.svg)](LICENSE)
-[![Node: >=24.9](https://img.shields.io/badge/Node.js-%3E%3D24.9-339933.svg?logo=nodedotjs)](https://nodejs.org/)
-[![Python: 3.11--3.13](https://img.shields.io/badge/Python-3.11_%7C_3.12_%7C_3.13-3776ab.svg?logo=python)](https://www.python.org/)
-[![Package Manager: uv](https://img.shields.io/badge/Package%20Manager-uv-DE5FE9.svg?logo=astral)](https://docs.astral.sh/uv/)
-[![Architecture: Cordis](https://img.shields.io/badge/Architecture-Cordis_Plugin-6366f1.svg)](https://github.com/cordiverse/cordis)
+[![License: Mixed](https://img.shields.io/badge/License-MIT_%26_Citation-blue.svg)](LICENSE) [![Node: >=24.9](https://img.shields.io/badge/Node.js-%3E%3D24.9-339933.svg?logo=nodedotjs)](https://nodejs.org/) [![Python: 3.11--3.13](https://img.shields.io/badge/Python-3.11_%7C_3.12_%7C_3.13-3776ab.svg?logo=python)](https://www.python.org/) [![Package Manager: uv](https://img.shields.io/badge/Package%20Manager-uv-DE5FE9.svg?logo=astral)](https://docs.astral.sh/uv/) [![Architecture: Cordis](https://img.shields.io/badge/Architecture-Cordis_Plugin-6366f1.svg)](https://github.com/cordiverse/cordis)
 
 ![MOSS Lab Automated Workstation](docs/images/moss-lab-banner.png)
 

@@ -24,7 +24,7 @@ export function AutoOpenExperiment({ sessionId, useResource, useSidebarMounted, 
   const opened = useStore(state => state.opened)
   const ready = resource.status === 'live' && resource.value?.status === 'ready' ? resource.value : undefined
   const key = delegated !== undefined
-    ? JSON.stringify([delegated.focusSequence ?? delegated.sequence, ready?.id, ready?.revision, ready?.task])
+    ? JSON.stringify([delegated.focusSequence ?? delegated.sequence])
     : ready === undefined ? undefined : JSON.stringify([ready.id, ready.revision, ready.task])
   useEffect(() => {
     if (voice.status !== 'live' || !mounted || key === undefined || key === opened) return

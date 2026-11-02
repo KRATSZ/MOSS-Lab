@@ -5,7 +5,7 @@ import { generateTransfer } from './transfer-template.mjs'
 const MAX_PROTOCOL = 256 * 1024
 
 /** Session-scoped experiment operations; analyzer and preview are trusted internal services. */
-export function createWorkflow({ store, analyzer, preview, captureIntent = () => () => {} }) {
+export function createWorkflow({ store, analyzer, preview, captureIntent = () => ({ assertCurrent() {}, previewReady() {} }) }) {
   const running = new Set()
   const pending = new Set()
   let closing = false
@@ -16,7 +16,7 @@ export function createWorkflow({ store, analyzer, preview, captureIntent = () =>
   return {
     create({ sessionId, creationKey, requirement, parameters, protocol }) {
       requireOpen()
-      captureIntent(sessionId)()
+      captureIntent(sessionId).assertCurrent()
       if (typeof requirement !== 'string' || !requirement.trim() || !parameters || typeof parameters !== 'object' || Array.isArray(parameters)) throw new ExperimentError('INVALID_INPUT', 'requirement and parameters are required')
       protocol = protocol === undefined ? generateTransfer(parameters) : protocol
       validateProtocol(protocol)
@@ -35,7 +35,7 @@ export function createWorkflow({ store, analyzer, preview, captureIntent = () =>
     },
     update({ sessionId, id, expectedRevision, requirement, parameters, protocol }) {
       requireOpen()
-      captureIntent(sessionId)()
+      captureIntent(sessionId).assertCurrent()
       if (typeof requirement !== 'string' || !requirement.trim() || !parameters || typeof parameters !== 'object' || Array.isArray(parameters)) throw new ExperimentError('INVALID_INPUT', 'requirement and parameters are required')
       protocol = protocol === undefined ? generateTransfer(parameters) : protocol
       validateProtocol(protocol)
@@ -45,7 +45,8 @@ export function createWorkflow({ store, analyzer, preview, captureIntent = () =>
     },
     async analyze({ sessionId, id, revision }) {
       requireOpen()
-      const assertCurrent = captureIntent(sessionId)
+      const intent = captureIntent(sessionId)
+      const { assertCurrent } = intent
       assertCurrent()
       if (running.has(id)) throw new ExperimentError('CHECK_IN_PROGRESS', 'analysis already in progress')
       const experiment = store.getForSession(sessionId, id)
@@ -70,6 +71,7 @@ export function createWorkflow({ store, analyzer, preview, captureIntent = () =>
         }
         if (closing) throw new ExperimentError('WORKFLOW_CLOSED', 'experiment workflow is closing')
         await preview.prepare({ id, revision, sessionId, analysis, assertCurrent })
+        intent.previewReady({ id, revision })
         return { id, revision, status: 'preview_ready', note: 'Local simulation only; device readiness and experimental safety were not checked.' }
       })()
       pending.add(operation)

@@ -71,7 +71,7 @@ test('a voice amendment blocks an older analysis before it can pass or publish a
   const workflow = createWorkflow({ store,
     captureIntent: () => {
       const captured = generation
-      return () => { if (captured !== generation) { const error = new Error('latest voice requirement changed'); error.code = 'VOICE_SUPERSEDED'; throw error } }
+      return { assertCurrent() { if (captured !== generation) { const error = new Error('latest voice requirement changed'); error.code = 'VOICE_SUPERSEDED'; throw error } }, previewReady() {} }
     },
     analyzer: { analyze: () => new Promise(resolve => { complete = resolve }) },
     preview: { prepare: async () => { published++ } },

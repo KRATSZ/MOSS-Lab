@@ -8,7 +8,7 @@ import { createWorkbenchWakeup } from './workbench-wakeup.mjs'
 import { createVoiceFeedback } from './voice-feedback.mjs'
 
 export const name = 'xiaozhi-readonly'
-export const inject = ['experimentStore', 'sessionController', 'workspaceRegistry', 'connection', 'sessionPersistence', 'webServer', 'agents', 'experimentPreview']
+export const inject = ['experimentStore', 'sessionController', 'workspaceRegistry', 'connection', 'sessionPersistence', 'webServer', 'agents']
 
 /** Mount an opt-in connection for one explicitly selected session.
  * @param {object} ctx Cordis context with the experiment store.
@@ -48,7 +48,6 @@ export function apply(ctx, config) {
       const current = delegation.workbench()
       if (current.focusSequence > seenFocus) { seenFocus = current.focusSequence; void wakeup.wake().then(reportWake) }
     })
-    const stopPreview = ctx.experimentPreview.subscribe(value => { if (value.fromAnalysis) delegation.previewReady(value) })
     let disconnect, unregister
     const record = value => {
       if (!config.diagnosticsPath) return
@@ -79,8 +78,8 @@ export function apply(ctx, config) {
           reportedConnectionStatus = status
         } })
     } catch (error) {
-      stopChanges(); stopPreview(); feedback.close(); void unregister?.(); void wakeup.close(); delegation.close(); throw error
+      stopChanges(); feedback.close(); void unregister?.(); void wakeup.close(); delegation.close(); throw error
     }
-    return async () => { stopChanges(); stopPreview(); feedback.close(); delegation.close(); const stoppedWake = wakeup.close(); await unregister?.(); await disconnect?.(); await stoppedWake }
+    return async () => { stopChanges(); feedback.close(); delegation.close(); const stoppedWake = wakeup.close(); await unregister?.(); await disconnect?.(); await stoppedWake }
   }, 'xiaozhi-readonly.connection')
 }

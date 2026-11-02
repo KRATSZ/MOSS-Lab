@@ -30,7 +30,7 @@ The client watches the current session's same-origin preview status every one se
 
 The local Xiaozhi bridge selects the conversation and opens the experiment panel on first opening, essential-condition questions and current-preview completion. Ordinary amendments and repeated polls preserve the user’s selection. During amendments the old animation is hidden; only the exact current checked preview is displayed, even if the Agent reply is still running. Missing conditions appear directly in the panel. The authenticated bridge endpoint must be mounted by the local MOSS launch configuration.
 
-Once the current checked preview is playing, completion of the Agent reply does not reload its player. A failed voice request shows one error with the next action instead of continuing to say it is waiting. Demo playback is independent of voice-task state and keeps its explicit demo label.
+Once the current checked preview is playing, completion of the Agent reply does not reload its player. A failed voice request shows one error with the next action. If the same request already published a current checked preview, it remains visible when the final reply is stopped; unavailable or mismatched previews stay hidden. Demo playback is independent of voice-task state and keeps its explicit demo label.
 
 ## Model Experience
 

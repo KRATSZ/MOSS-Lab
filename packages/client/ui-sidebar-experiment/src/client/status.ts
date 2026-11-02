@@ -149,7 +149,7 @@ export const statusProvider: ResourceProvider<'experimentstatus'> = {
   },
 }
 
-/** Latest accepted voice message; completing a turn does not mean an experiment ran. */
+/** Current request or checked preview in the bound workbench; completion never means a robot ran. */
 export type VoiceWorkbenchStatus = {
   readonly sequence: number
   readonly sessionId: string | null

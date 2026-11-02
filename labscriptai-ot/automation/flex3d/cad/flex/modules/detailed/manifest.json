@@ -259,7 +259,7 @@
         "stl": "mm, part-local",
         "glb": "m, standard glTF"
       },
-      "provenance": {
+      "source_references": {
         "geometry": "project authored; official photographs and module definitions",
         "license": "Project-authored geometry; reference images retain original rights",
         "dimensions": "Official module definition envelopes and labware offsets",
@@ -641,7 +641,7 @@
         "stl": "mm, part-local",
         "glb": "m, standard glTF"
       },
-      "provenance": {
+      "source_references": {
         "geometry": "project authored; official photographs and module definitions",
         "license": "Project-authored geometry; reference images retain original rights",
         "dimensions": "Official module definition envelopes and labware offsets",
@@ -849,7 +849,7 @@
         "stl": "mm, part-local",
         "glb": "m, standard glTF"
       },
-      "provenance": {
+      "source_references": {
         "geometry": "project authored; official photographs and module definitions",
         "license": "Project-authored geometry; reference images retain original rights",
         "dimensions": "Official module definition envelopes and labware offsets",
@@ -992,7 +992,7 @@
         "stl": "mm, part-local",
         "glb": "m, standard glTF"
       },
-      "provenance": {
+      "source_references": {
         "geometry": "project authored; official photographs and module definitions",
         "license": "Project-authored geometry; reference images retain original rights",
         "dimensions": "Official module definition envelopes and labware offsets",
@@ -1204,7 +1204,7 @@
         "stl": "mm, part-local",
         "glb": "m, standard glTF"
       },
-      "provenance": {
+      "source_references": {
         "geometry": "project authored; official photographs and module definitions",
         "license": "Project-authored geometry; reference images retain original rights",
         "dimensions": "Official module definition envelopes and labware offsets",

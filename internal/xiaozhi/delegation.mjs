@@ -11,7 +11,7 @@ export class VoiceIntentError extends Error {
 /** Own the endpoint conversation, latest accepted intent, and phase-driven navigation. */
 export function createDelegation({ controller, workspaces, events, timeoutMs = 300000, sessionId = null, bindingPath = null, workspacePath = null, agentPreset = 'standard', validateSession = async () => {}, cancelSession = async () => {}, removePendingVoice = async () => {} }) {
   const jobs = new Map(), subscribers = new Set()
-  let closed = false, activeSession = sessionId, sequence = 0, latestJob = null
+  let closed = false, activeSession = sessionId, sequence = 0, latest = null
   let focusSequence = 0, focusReason = null, presented = false
   let admission = Promise.resolve()
   if (bindingPath && existsSync(bindingPath)) {
@@ -33,11 +33,10 @@ export function createDelegation({ controller, workspaces, events, timeoutMs = 3
   const changed = () => { for (const listener of subscribers) { try { listener() } catch { console.warn('xiaozhi task observer failed') } } }
   const focus = reason => { focusSequence = Math.max(focusSequence + 1, Date.now()); focusReason = reason }
   const publicJob = job => ({ jobId: job.jobId, sessionId: job.sessionId, status: job.status, result: job.result, cycleId: job.cycleId, phase: job.phase, question: job.question, preview: job.preview, supersededBy: job.supersededBy })
-  const latestForSession = id => [...jobs.values()].filter(job => job.sessionId === id).at(-1)
 
   async function admit(message, newExperiment) {
     if (closed) throw new Error('委派服务已关闭')
-    const previous = jobs.get(latestJob)
+    const previous = latest
     const replacing = active(previous)
     if (jobs.size >= 100) jobs.delete(jobs.keys().next().value)
     const jobId = randomUUID()
@@ -67,7 +66,7 @@ export function createDelegation({ controller, workspaces, events, timeoutMs = 3
       } else { await validateSession(activeSession, agentPreset); checkOpen(); job.sessionId = activeSession }
       const nextSequence = Math.max(sequence + 1, Date.now())
       persist(job.sessionId, nextSequence)
-      activeSession = job.sessionId; sequence = nextSequence; latestJob = jobId
+      activeSession = job.sessionId; sequence = nextSequence; latest = job
       if (replacing) {
         await removePendingVoice(previous.sessionId, previous.requestId)
         checkOpen()
@@ -108,7 +107,7 @@ export function createDelegation({ controller, workspaces, events, timeoutMs = 3
         return { jobId, sessionId: job.sessionId, status: job.status, note: observationClosed ? '委派服务已关闭，无法继续跟踪；任务可能仍在网页中运行。' : observing ? '提交结果未知，请查询任务状态并查看网页会话。' : '任务已有结果，请查询任务状态。' }
       }
       finish('error', '委派失败：' + error.message)
-      if (latestJob !== jobId) jobs.delete(jobId)
+      if (latest !== job) jobs.delete(jobId)
       throw error
     }
   }
@@ -124,28 +123,35 @@ export function createDelegation({ controller, workspaces, events, timeoutMs = 3
     subscribe(listener) { subscribers.add(listener); return () => subscribers.delete(listener) },
     activeSessionId() { return activeSession },
     workbench() {
-      const job = jobs.get(latestJob)
+      const job = latest
       return { sequence, focusSequence, focusReason, sessionId: activeSession, jobId: job?.jobId ?? null, status: job?.status ?? 'idle', result: job?.result ?? null, phase: job?.phase ?? 'idle', question: job?.question ?? null, preview: job?.preview ?? null }
     },
     get(jobId) { const job = jobs.get(jobId); if (!job) throw new Error('任务不存在或服务已重启'); return publicJob(job) },
-    needsInput(id, question) {
-      const job = jobs.get(latestJob)
-      if (!active(job) || !job.claimed || job.sessionId !== id) return false
-      if (job.phase === 'needs_input' && job.question === question) return true
-      job.phase = 'needs_input'; job.question = question; focus('needs_input'); changed(); return true
-    },
-    previewReady({ sessionId: id, id: experimentId, revision }) {
-      const job = jobs.get(latestJob)
-      if (!active(job) || !job.claimed || job.sessionId !== id) return false
-      if (job.preview?.id === experimentId && job.preview.revision === revision) return true
-      job.phase = 'preview_ready'; job.preview = { id: experimentId, revision }; focus('preview_ready'); changed(); return true
-    },
     captureIntent(id) {
-      const job = latestForSession(id)
-      if (!job || !active(job) && !['superseded', 'error'].includes(job.status)) return () => {}
-      if (job.status === 'superseded') throw new VoiceIntentError('VOICE_SUPERSEDED')
-      if (!job.claimed) throw new VoiceIntentError('VOICE_INTENT_PENDING')
-      return () => { if (closed || latestForSession(id)?.jobId !== job.jobId || job.status === 'superseded') throw new VoiceIntentError('VOICE_SUPERSEDED') }
+      if (id !== activeSession) return { assertCurrent() {}, needsInput() {}, previewReady() {} }
+      const owner = latest
+      const voice = active(owner) ? owner : null
+      if (voice && !voice.claimed) throw new VoiceIntentError('VOICE_INTENT_PENDING')
+      const current = () => !closed && activeSession === id && latest === owner && owner?.status !== 'superseded'
+      const assertCurrent = () => { if (!current()) throw new VoiceIntentError('VOICE_SUPERSEDED') }
+      const publish = (phase, fields) => {
+        // A newer intent suppresses focus without rolling back a committed preview.
+        if (!current()) return false
+        if (voice) {
+          if (phase === 'preview_ready' && voice.preview?.id === fields.preview.id && voice.preview.revision === fields.preview.revision) return true
+          if (phase === 'needs_input' && voice.phase === phase && voice.question === fields.question) return true
+          Object.assign(voice, fields)
+          if (voice.status !== 'error') voice.phase = phase
+        } else {
+          latest = { jobId: null, sessionId: id, status: 'completed', result: null, phase, question: null, preview: null, ...fields }
+        }
+        focus(phase); changed(); return true
+      }
+      return {
+        assertCurrent,
+        needsInput: question => publish('needs_input', { question }),
+        previewReady: ({ id, revision }) => publish('preview_ready', { preview: { id, revision } }),
+      }
     },
     close() { closed = true; for (const job of jobs.values()) if (active(job)) job.cancelObservation?.(); subscribers.clear() },
   }

@@ -17,10 +17,10 @@ function fixture() {
     removePendingVoice: async (id, requestId) => removed.push({ id, requestId }) })
   return { delegation, requests, removed, get created() { return created },
     claim(index, turn = 1) { const request = requests[index]; emit('agent/inbox/claimed', { agent: { id: request.sessionId }, message: { source: { rpcId: request.requestId } }, turn }) },
-    end(index, text = 'done', turn = 1) {
+    end(index, text = 'done', turn = 1, reason = 'completed') {
       const request = requests[index]
       emit('session/event', { id: request.sessionId }, { type: 'assistant/message', data: { turn, message: { content: [{ type: 'text', text }] } } })
-      emit('session/event', { id: request.sessionId }, { type: 'turn/end', data: { turn, reason: { kind: 'completed' } } })
+      emit('session/event', { id: request.sessionId }, { type: 'turn/end', data: { turn, reason: { kind: reason } } })
     },
   }
 }
@@ -29,7 +29,7 @@ test('amendments immediately supersede older jobs and cannot publish an older in
   const f = fixture()
   try {
     const first = await f.delegation.submit('3 repeats'); f.claim(0)
-    const originalGuard = f.delegation.captureIntent(first.sessionId)
+    const originalGuard = f.delegation.captureIntent(first.sessionId).assertCurrent
     const firstFocus = f.delegation.workbench().focusSequence
     const amended = await f.delegation.submit('actually 4 repeats')
     assert.equal(amended.sessionId, first.sessionId)
@@ -41,15 +41,15 @@ test('amendments immediately supersede older jobs and cannot publish an older in
     assert.deepEqual(f.removed, [{ id: first.sessionId, requestId: f.requests[0].requestId }])
     assert.throws(originalGuard, error => error.code === 'VOICE_SUPERSEDED')
     assert.throws(() => f.delegation.captureIntent(first.sessionId), error => error.code === 'VOICE_INTENT_PENDING')
-    assert.equal(f.delegation.previewReady({ sessionId: first.sessionId, id: 'e', revision: 1 }), false)
+    assert.throws(originalGuard, error => error.code === 'VOICE_SUPERSEDED')
     f.end(0, 'old result')
     assert.equal(f.delegation.get(amended.jobId).status, 'running')
     f.claim(1, 2)
-    f.delegation.captureIntent(first.sessionId)()
-    assert.equal(f.delegation.previewReady({ sessionId: first.sessionId, id: 'e', revision: 2 }), true)
+    f.delegation.captureIntent(first.sessionId).assertCurrent()
+    assert.equal(f.delegation.captureIntent(first.sessionId).previewReady({ id: 'e', revision: 2 }), true)
     const readyFocus = f.delegation.workbench().focusSequence
     assert.ok(readyFocus > firstFocus)
-    f.delegation.previewReady({ sessionId: first.sessionId, id: 'e', revision: 2 })
+    f.delegation.captureIntent(first.sessionId).previewReady({ id: 'e', revision: 2 })
     assert.equal(f.delegation.workbench().focusSequence, readyFocus)
     f.end(1, 'new result', 2)
     assert.equal(f.delegation.get(amended.jobId).phase, 'preview_ready')
@@ -92,7 +92,7 @@ test('three wait hints cover the whole amendment cycle; automatic completion is 
     assert.equal(old.followJobId, latest.jobId)
     assert.equal(old.speech.speak, false)
     assert.equal(feedback.snapshot().waitingCount, 3)
-    f.delegation.previewReady({ sessionId: latest.sessionId, id: 'e', revision: 4 })
+    f.delegation.captureIntent(latest.sessionId).previewReady({ id: 'e', revision: 4 })
     f.end(1, 'a very long assistant explanation')
     const completed = await feedback.status(latest.jobId)
     assert.equal(completed.speech.text, '预览已更新，请看电脑。')
@@ -143,12 +143,74 @@ test('a clarification focuses once and finishes as needs_input rather than a pre
   try {
     const accepted = await f.delegation.submit('missing conditions'); f.claim(0)
     const initialFocus = f.delegation.workbench().focusSequence
-    assert.equal(f.delegation.needsInput(accepted.sessionId, '每孔最终体积是多少？'), true)
+    assert.equal(f.delegation.captureIntent(accepted.sessionId).needsInput('每孔最终体积是多少？'), true)
     const confirmationFocus = f.delegation.workbench().focusSequence
     assert.ok(confirmationFocus > initialFocus)
-    f.delegation.needsInput(accepted.sessionId, '每孔最终体积是多少？')
+    f.delegation.captureIntent(accepted.sessionId).needsInput('每孔最终体积是多少？')
     assert.equal(f.delegation.workbench().focusSequence, confirmationFocus)
     f.end(0, '每孔最终体积是多少？')
     assert.equal((await feedback.status(accepted.jobId)).speech.text, '每孔最终体积是多少？')
   } finally { feedback.close(); f.delegation.close() }
+})
+
+
+test('stopping the final reply retains the preview published for that exact job', async () => {
+  const f = fixture()
+  try {
+    const accepted = await f.delegation.submit('analyze current experiment')
+    f.claim(0)
+    f.delegation.captureIntent(accepted.sessionId).previewReady({ id: 'e', revision: 3 })
+    f.end(0, 'partial reply', 1, 'aborted')
+    assert.equal(f.delegation.workbench().status, 'error')
+    assert.deepEqual(f.delegation.workbench().preview, { id: 'e', revision: 3 })
+    assert.deepEqual(f.delegation.get(accepted.jobId).preview, { id: 'e', revision: 3 })
+  } finally { f.delegation.close() }
+})
+
+
+test('a normal Web publication after voice completion opens its current preview without changing the old receipt', async () => {
+  const f = fixture()
+  try {
+    const accepted = await f.delegation.submit('voice request'); f.claim(0); f.end(0)
+    const oldReceipt = f.delegation.get(accepted.jobId)
+    const before = f.delegation.workbench()
+    const intent = f.delegation.captureIntent(accepted.sessionId)
+    intent.assertCurrent()
+    assert.equal(intent.previewReady({ id: 'manual', revision: 2 }), true)
+    const view = f.delegation.workbench()
+    assert.equal(view.jobId, null)
+    assert.equal(view.sessionId, accepted.sessionId)
+    assert.equal(view.sequence, before.sequence)
+    assert.ok(view.focusSequence > before.focusSequence)
+    assert.deepEqual(view.preview, { id: 'manual', revision: 2 })
+    assert.deepEqual(f.delegation.get(accepted.jobId), oldReceipt)
+  } finally { f.delegation.close() }
+})
+
+test('a new voice intent invalidates an in-flight normal Web publication', async () => {
+  const f = fixture()
+  try {
+    const first = await f.delegation.submit('first'); f.claim(0); f.end(0)
+    const normal = f.delegation.captureIntent(first.sessionId)
+    const next = await f.delegation.submit('new voice')
+    const focus = f.delegation.workbench().focusSequence
+    assert.throws(normal.assertCurrent, error => error.code === 'VOICE_SUPERSEDED')
+    assert.equal(normal.previewReady({ id: 'old', revision: 1 }), false)
+    assert.equal(f.delegation.workbench().jobId, next.jobId)
+    assert.equal(f.delegation.workbench().focusSequence, focus)
+    assert.equal(f.delegation.workbench().preview, null)
+  } finally { f.delegation.close() }
+})
+
+test('an already captured voice publication can finish after its final reply was stopped', async () => {
+  const f = fixture()
+  try {
+    const accepted = await f.delegation.submit('analyze'); f.claim(0)
+    const intent = f.delegation.captureIntent(accepted.sessionId)
+    f.end(0, 'partial', 1, 'aborted')
+    intent.assertCurrent()
+    assert.equal(intent.previewReady({ id: 'e', revision: 3 }), true)
+    assert.equal(f.delegation.get(accepted.jobId).status, 'error')
+    assert.deepEqual(f.delegation.get(accepted.jobId).preview, { id: 'e', revision: 3 })
+  } finally { f.delegation.close() }
 })

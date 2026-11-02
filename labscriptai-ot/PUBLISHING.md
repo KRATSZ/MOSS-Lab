@@ -29,7 +29,7 @@ The output goes to `dist/`:
 - `labscriptai-ot-0.1.2.zip` — one runtime package for Cursor, Claude Code and Codex, including detailed Flex module meshes
 - `release-manifest.json` — version, sizes, file counts and SHA-256 hashes; build-info.json inside the ZIP identifies the exact runtime content
 
-The runtime package excludes development tests, QA notes, local state, secrets, Python/Node environments, vision training weights and model authoring sources. Detailed models include only the OBJ meshes required at runtime and their manifest/provenance; Blender, GLB and STL duplicates stay out. Extract the ZIP and install from its `labscriptai-ot/` folder. The viewer uses detailed modules automatically.
+The runtime package excludes development tests, QA notes, local state, secrets, Python/Node environments, vision training weights and model authoring sources. Detailed models include only the OBJ meshes required at runtime and their manifest and model source records; Blender, GLB and STL duplicates stay out. Extract the ZIP and install from its `labscriptai-ot/` folder. The viewer uses detailed modules automatically.
 
 Tags named `v<version>` run the three-platform checks and publish the ZIP from that tag only when the version matches. Each ZIP contains `build-info.json`; `health_check` reports that identity and the loaded folder.
 

@@ -49,7 +49,7 @@ A passed `protocol-analysis` check stores the full analysis bytes (`analysisBase
 
 The authenticated `/api/robot-status` route reads `OPENTRONS_URL` at startup and queries only the robot's health and instruments endpoints on demand. It returns available model, health status, instruments and query time; an unconfigured, unreachable or partially responding robot is reported separately. This snapshot is not a device-readiness or safety assessment.
 
-Voice amendments share a bounded wait budget and invalidate older analysis before checks or previews publish. `request_experiment_input` reports essential missing conditions to the workbench; the preview service emits current-analysis events separately from restart recovery. These events control clarification and preview focus without treating recovered old data as a new completion.
+The workflow captures the current intent before analysis and checks it again before publishing a check or preview. Its captured acknowledgement updates the workbench directly after publication; a newer intent suppresses that obsolete acknowledgement. Restart recovery rebuilds the stored scene without announcing a new completion.
 
 ## Known limitations
 

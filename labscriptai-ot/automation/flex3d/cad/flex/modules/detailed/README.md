@@ -8,4 +8,4 @@ For model development, editable `.blend` sources and the Blender export script l
 
 Model detail comes from project-authored geometry informed by official module envelopes and photographs. It is not manufacturer CAD or metrology. Hinge, latch, and removable-lid motion is illustrative and not calibrated on hardware. Temperature displays are dark because the player has no telemetry. The model does not simulate temperature, vibration, or optical measurement. Coarse group-5 collision proxies remain separate from visual meshes; the thermocycler lid collision proxy follows its hinge.
 
-Reference images retain their original rights and are not included. Module definitions and documentation are cited in `manifest.json` provenance.
+Reference images retain their original rights and are not included. Module definitions and documentation are cited in the `source_references` records in `manifest.json`.

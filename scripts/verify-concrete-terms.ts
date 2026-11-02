@@ -8,7 +8,7 @@ import { historicalSchemaRegion } from './historical-schema-region.ts'
 
 const root = resolve(import.meta.dirname, '..')
 const blockedTerm = 'prove' + 'nance'
-const excludedPrefixes = ['vendor/', '.agents/notes/archived/'] as const
+const excludedPrefixes = ['.agents/notes/archived/'] as const
 
 /** One blocked term occurrence in a tracked path or text line. */
 export interface ConcreteTermViolation {
@@ -19,7 +19,8 @@ export interface ConcreteTermViolation {
 }
 
 function isExcluded(file: string): boolean {
-  return excludedPrefixes.some(prefix => file.startsWith(prefix))
+  return /(?:^|\/)vendor\//u.test(file)
+    || excludedPrefixes.some(prefix => file.startsWith(prefix))
     // Release snapshots retain the identifiers present in their pinned source;
     // historical-format pairing records key sections by those identifiers' headings.
     || /^docs\/persistence-changes\/releases\/dsh-v\d+\.\d+\.\d+-(?:alpha|rc)\.\d+\.schema\.json$/u.test(file)

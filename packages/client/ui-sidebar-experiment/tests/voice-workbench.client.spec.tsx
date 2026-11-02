@@ -266,3 +266,60 @@ it('keeps demo playback separate from the current voice preview and returns to t
   expect(view.container.querySelector('iframe')?.getAttribute('srcdoc')).toContain('real plan')
   view.unmount()
 })
+
+
+it('does not reopen the experiment tab when an amendment invalidates the old preview', () => {
+  const store = createAutoOpenStore().create()
+  const openExperiment = vi.fn(() => true)
+  let available = true, focusSequence = 10, revision = 1
+  const props = { sessionId: 's', useResource: (address: string) => ({ status: 'live', value: address.includes('voiceworkbench')
+    ? { sequence: 2, focusSequence, sessionId: 's', status: 'running' }
+    : available ? { status: 'ready', id: 'e', revision, task: String(revision) } : { status: 'waiting' } }),
+  useSidebarMounted: () => true, openExperiment,
+  useStore: (select: (state: ReturnType<typeof store.getSnapshot>) => unknown) => select(store.getSnapshot()),
+  actions: store.actions } as Parameters<typeof AutoOpenExperiment>[0]
+  const view = render(<AutoOpenExperiment {...props} />)
+  expect(openExperiment).toHaveBeenCalledTimes(1)
+  available = false
+  view.rerender(<AutoOpenExperiment {...props} />)
+  expect(openExperiment).toHaveBeenCalledTimes(1)
+  available = true; revision = 2; focusSequence = 11
+  view.rerender(<AutoOpenExperiment {...props} />)
+  expect(openExperiment).toHaveBeenCalledTimes(2)
+  view.rerender(<AutoOpenExperiment {...props} />)
+  expect(openExperiment).toHaveBeenCalledTimes(2)
+  view.unmount()
+})
+
+it.each([zh, en])('retains the current checked preview if only its final reply is stopped', (locale) => {
+  let status = 'running', phase = 'preview_ready'
+  const addresses: string[] = []
+  const props = { sessionId: 's', useTabInfo: () => ({ tab: { id: 'tab' } }), t: (key: keyof typeof zh) => locale[key],
+    useResource: (address: string) => {
+      if (address.includes('voiceworkbench')) return { status: 'live', value: { sequence: 4, sessionId: 's', status, phase, result: '本次生成已停止', preview: { id: 'e', revision: 3 } } }
+      if (address.includes('experimentstatus')) addresses.push(address)
+      return { status: 'live', value: { status: 'ready', id: 'e', revision: 3, task: 'current', document: '<p>checked preview</p>' } }
+    } } as Parameters<typeof ExperimentBody>[0]
+  const view = render(<ExperimentBody {...props} />)
+  const frame = view.container.querySelector('iframe')
+  const address = addresses.at(-1)
+  status = 'error'; phase = 'error'
+  view.rerender(<ExperimentBody {...props} />)
+  expect(view.container.querySelector('iframe')).toBe(frame)
+  expect(frame?.getAttribute('srcdoc')).toContain('checked preview')
+  expect(addresses.at(-1)).toBe(address)
+  expect(screen.getAllByRole('alert')).toHaveLength(1)
+  expect(screen.getByRole('alert').textContent).toContain(locale.voiceFailed)
+  view.unmount()
+})
+
+it.each([{ id: 'e', revision: 2 }, { id: 'other', revision: 3 }])('rejects a mismatched preview after a stopped reply: %j', (preview) => {
+  const props = { sessionId: 's', useTabInfo: () => ({ tab: { id: 'tab' } }), t: (key: keyof typeof zh) => zh[key],
+    useResource: (address: string) => ({ status: 'live', value: address.includes('voiceworkbench')
+      ? { sequence: 4, sessionId: 's', status: 'error', preview, result: '本次生成已停止' }
+      : { status: 'ready', id: 'e', revision: 3, task: 'current', document: 'another preview' } }) } as Parameters<typeof ExperimentBody>[0]
+  const view = render(<ExperimentBody {...props} />)
+  expect(view.container.querySelector('iframe')).toBeNull()
+  expect(screen.getAllByRole('alert')).toHaveLength(1)
+  view.unmount()
+})

@@ -135,10 +135,23 @@ export const zh: Record<AgentPresetSettingsKey, string> = {
 import { isBuiltInPreset as isRegistryBuiltInPreset, presetDisplayText as registryDisplayText } from '@deepseek-ai/dsh-agent-preset-registry/display'
 import type { PresetDisplaySource, PresetDisplayText } from '@deepseek-ai/dsh-agent-preset-registry/display'
 
+/**
+ * Identify rows whose display copy is owned by this plugin's locale dictionaries.
+ * Named rows retain their published metadata instead of built-in translations.
+ * @param preset - roster row whose id and published name determine copy ownership.
+ * @returns `true` when the row is an unnamed built-in with localized copy.
+ */
 export function isBuiltInPreset(preset: PresetDisplaySource): boolean {
   return (preset.id === 'chat' && preset.name === undefined) || isRegistryBuiltInPreset(preset)
 }
 
+/**
+ * Resolve a roster row's name and description for the active locale.
+ * Built-in rows use the supplied dictionary lookup; named custom rows remain untranslated, and an unnamed unknown row falls back to its id.
+ * @param preset - roster row being displayed.
+ * @param t - active-locale lookup for this plugin's display keys.
+ * @returns localized built-in copy or the row's published/fallback metadata.
+ */
 export function presetDisplayText(preset: PresetDisplaySource, t: (key: AgentPresetSettingsKey) => string): PresetDisplayText {
   if (preset.id === 'chat' && preset.name === undefined) {
     return { name: t('presetChatName'), description: t('presetChatDescription') }

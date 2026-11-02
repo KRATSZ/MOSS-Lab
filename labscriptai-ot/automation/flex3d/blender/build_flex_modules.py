@@ -393,7 +393,7 @@ def export_asset(model, asset):
         'max':[max(v[i] for v in envelope) for i in range(3)]}
     result['nominal_envelope_note']='Nominal body envelope excludes small connectors/labels; see measured closed_bounds_mm.'
     result['format_units']={'blend':'mm (scene scale_length .001)','obj':'mm, part-local','stl':'mm, part-local','glb':'m, standard glTF'}
-    result['provenance']={'geometry':'project authored; official photographs and module definitions',
+    result['source_references']={'geometry':'project authored; official photographs and module definitions',
         'license':'Project-authored geometry; reference images retain original rights',
         'dimensions':'Official module definition envelopes and labware offsets',
         'detail':'Photo reconstruction, not metrology or manufacturer CAD',

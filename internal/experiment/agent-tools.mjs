@@ -41,9 +41,9 @@ export function apply(ctx) {
     async execute(args, exec) {
       if (!args.question.trim() || Buffer.byteLength(args.question) > 2000) throw new Error('A concise nonempty question is required.')
       const current = sessionId(exec)
-      const intent = ctx.get('mossVoiceIntent')
-      intent?.captureIntent(current)()
-      intent?.needsInput(current, args.question)
+      const intent = ctx.get('mossVoiceIntent')?.captureIntent(current)
+      intent?.assertCurrent()
+      intent?.needsInput(args.question)
       return { status: 'needs_input', question: args.question }
     },
   }))
