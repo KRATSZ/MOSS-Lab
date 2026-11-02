@@ -54,3 +54,6 @@ worktrees/
 .typert-*/
 native/system/test/bin/
 .moss-model-*.patch.yml
+
+# Local agent progress and verification evidence
+.agent-runs/

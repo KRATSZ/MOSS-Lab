@@ -23,9 +23,13 @@ The current session opens **Experiment animation** automatically when a checked 
 <a id="implementation"></a>
 ## Implementation
 
-The client watches the current session's same-origin preview status every five seconds, opens each new checked task once, and checks again when the user selects **Check again**. Demo mode uses `/api/experiment-demo` and the fixed session `demo`; real experiments use `/api/experiment-preview`. Both fetch bounded resources for the selected revision and task and render them in a sandboxed frame after rechecking the status. **Check robot status** makes one separate read-only request and displays the available device information and query time.
+The client watches the current session's same-origin preview status every one second, opens each new checked task once, and checks again when the user selects **Check again**. Demo mode uses `/api/experiment-demo` and the fixed session `demo`; real experiments use `/api/experiment-preview`. Both fetch bounded resources for the selected revision and task and render them in a sandboxed frame after rechecking the status. **Check robot status** makes one separate read-only request and displays the available device information and query time.
 
 <a id="model-experience"></a>
+## Voice workbench
+
+A new message accepted by the local Xiaozhi bridge selects its existing conversation and opens the experiment panel before a preview is available. Repeated status polls do not change the selection. During a voice revision the previous animation is hidden; the current checked preview replaces it with its revision number when processing ends. The authenticated bridge endpoint must be mounted by the local MOSS launch configuration.
+
 ## Model Experience
 
 None, as this package only displays a sidebar entry and registers nothing model-facing.

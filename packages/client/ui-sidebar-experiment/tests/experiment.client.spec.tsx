@@ -97,7 +97,7 @@ describe('experiment animation entry', () => {
     try {
       expect((await iterator.next()).value).toEqual({ ok: true, value: { status: 'checking' } })
       const next = iterator.next()
-      await vi.advanceTimersByTimeAsync(5000)
+      await vi.advanceTimersByTimeAsync(1000)
       expect((await next).value).toEqual({ ok: true, value: { status: 'ready', id: 'x', revision: 1, task: 't' } })
     } finally {
       controller.abort()
@@ -187,7 +187,7 @@ describe('experiment animation entry', () => {
     view.unmount()
   })
 
-  it('checks again after five seconds and reports a disconnect', async () => {
+  it('checks again after one second and reports a disconnect', async () => {
     vi.useFakeTimers()
     const request = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(Response.json({ status: 'waiting' }))
@@ -197,7 +197,7 @@ describe('experiment animation entry', () => {
     try {
       expect((await iterator.next()).value).toEqual({ ok: true, value: { status: 'waiting' } })
       const next = iterator.next()
-      await vi.advanceTimersByTimeAsync(5000)
+      await vi.advanceTimersByTimeAsync(1000)
       expect((await next).value?.ok).toBe(false)
       expect(request).toHaveBeenCalledTimes(2)
     } finally {
@@ -218,7 +218,7 @@ describe('experiment animation entry', () => {
     try {
       await iterator.next()
       const next = iterator.next()
-      await vi.advanceTimersByTimeAsync(5000)
+      await vi.advanceTimersByTimeAsync(1000)
       expect((await next).value).toEqual({ ok: true, value: { status: 'checking' } })
     } finally {
       controller.abort()
@@ -288,6 +288,8 @@ describe('experiment animation entry', () => {
       },
     }
     ctx.provide('resources', { register: () => () => {} } as never)
+    ctx.provide('sessions', { refresh: async () => {} } as never)
+    ctx.provide('uiWorkspace', { openSession() {} } as never)
     ctx.provide('sidebarRightTabs', tabs as never)
     ctx.provide('sidebarRight', { mounted: { getSnapshot: () => undefined } } as never)
     ctx.provide('slots', slots as never)
@@ -301,8 +303,8 @@ describe('experiment animation entry', () => {
       const tab = tabs.get('experiment-animation')
       expect(tab?.guide?.[0]?.title()).toBe(en.title)
       expect(tab?.guide?.[0]?.icon).toBeDefined()
-      expect(entries.map(entry => entry.name)).toEqual(['conversation.composer.dock', 'sidebar.right.pane.tab', 'sidebar.right.pane.tab.title'])
-      expect(entries.slice(1).every(entry => entry.key === tab?.id)).toBe(true)
+      expect(entries.map(entry => entry.name)).toEqual(['shell.overlay', 'conversation.composer.dock', 'sidebar.right.pane.tab', 'sidebar.right.pane.tab.title'])
+      expect(entries.slice(2).every(entry => entry.key === tab?.id)).toBe(true)
     } finally {
       await fiber.dispose()
     }

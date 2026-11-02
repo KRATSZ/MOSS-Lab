@@ -15,8 +15,11 @@
   en: 45c36aefaf97e6d2
   zh: 61ccbfaf7fe0026d
 /deepseek-ai-dsh-client-ui-sidebar-experiment/implementation:
-  en: b4b467c7ddcb2072
-  zh: 744c4e1bc3a0d4a3
+  en: c5f50cffd0a0aafe
+  zh: 669caaa5bb9ef958
+/deepseek-ai-dsh-client-ui-sidebar-experiment/voice-workbench:
+  en: cc0e82cf45367e4b
+  zh: 9bd6b490db4484e1
 /deepseek-ai-dsh-client-ui-sidebar-experiment/model-experience:
   en: fb50323431573a29
   zh: 8c3eca422ec98537
@@ -25,7 +28,7 @@
   zh: 227a1ab2414b5577
 /deepseek-ai-dsh-client-ui-sidebar-experiment/known-limitations-and-deferred-work:
   en: ef2b8773ec862cb8
-  zh: 5d6d96e5dafd267e
+  zh: 6e6d67b62a67f634
 /deepseek-ai-dsh-client-ui-sidebar-experiment/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 8ec3e73528ddb1a6

@@ -14,7 +14,7 @@
   },
   "dsh": {
     "client": {
-      "inject": ["@deepseek-ai/dsh-client-ui-sidebar-right", "@deepseek-ai/dsh-client-ui-session"],
+      "inject": ["@deepseek-ai/dsh-client-ui-sidebar-right", "@deepseek-ai/dsh-client-ui-session", "@deepseek-ai/dsh-client-ui-workspace"],
       "platform": "web"
     }
   },
@@ -22,6 +22,9 @@
   "license": "MIT",
   "peerDependencies": { "@deepseek-ai/cordis": "workspace:~" },
   "devDependencies": {
+    "@deepseek-ai/dsh-client-ui-workspace": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-layout": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-client-locale": "workspace:*",
     "@deepseek-ai/dsh-client-resources": "workspace:*",

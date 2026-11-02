@@ -2,30 +2,24 @@
 
 [English](README.md) | 中文
 
-此内部 Cordis 插件由本地启动配置启用。插件读取项目根目录 `.env` 中的 `XIAOZHI_WSS_URL`，主动建立一条 WSS 连接，地址和凭据不会写入日志。只支持 `wss:`；连接关闭后不自动重连，卸载插件时关闭连接。
+本地 MOSS 启动配置把此 Cordis 插件与已有网页 Agent 一同挂载。配置 `XIAOZHI_WSS_URL` 时建立一条主动 WSS 连接并提供 MCP 工具；地址是凭据，不写入日志。不配置接入点时仍可使用认证后的本地工作台。连接断开后暂不自动重连。
 
-桥接以 WebSocket 文本消息交换 MCP JSON-RPC。已连接配置的接入点观察到 `initialize`、`notifications/initialized` 和 `tools/list` 请求并收到工具清单。硬件语音调用和断线恢复尚未验证。没有主动通知或语音播报能力。
+语音委派使用名为**实验助手**的 `moss-experiment` 预设，提供实验角色及现有四个实验工具，不载入通用编程模式、Shell 或仓库工程指令。
 
-插件注入 `experimentStore`、`sessionController` 和 `workspaceRegistry`。只读工具绑定到部署者选定的一个 `sessionId`；启动配置将其设为 null，状态工具可用，实验查询会明确提示未绑定，小智请求不能选择会话。可信部署者可将其改为一个明确允许的会话：
+`moss_delegate(message, newExperiment=false)` 把用户原话交给当前实验会话。补充条件和修改参数复用同一会话；只有明确的新实验才另建。模型不能传入会话 ID。部署者可通过 `sessionId` 指定初始会话；未指定时首条请求使用已有工作区，尚无工作区时使用配置的 `workspacePath` 创建会话。私有 `bindingPath` 文件以原子替换保存当前会话和导航序号。重启后的下一条消息复用该身份；原会话缺失或仍使用旧编程模式时报告错误，不悄悄另建会话；明确开始新实验后采用实验模式，旧对话继续保留。
 
-```yaml
-- insert:
-    - id: xiaozhi-readonly
-      name: file:///absolute/path/to/internal/xiaozhi/plugin.mjs
-      config:
-        sessionId: REPLACE_WITH_AUTHORIZED_SESSION_ID
-```
+`moss_task_status(jobId)` 返回所跟踪 Agent 轮次的状态和最终答复，文字最多 4000 字符。`completed` 只表示 Agent 已回复，包括追问，绝不表示真机实验完成。同一时刻只接受一个语音委派轮次。超时后继续跟踪并占用并发名额，直到收到终态；提交结果不确定时仍保留跟踪。关闭服务只停止观察，不停止网页 Agent。任务回执保存在内存中，重启后丢失。
 
-`sessionId` 必须由受信任的部署者选定，并与小智端的使用者及其允许访问的网页会话对应。存储的会话检查不是身份认证；当前没有自动绑定或验证小智用户身份的机制，不适合共享或多用户部署。地址相当于访问凭据，应只由受信任的部署者持有。单个插件实例创建一个连接，部署者负责避免重复加载实例。
+`moss_experiment_status(id)` 查询部署者指定的会话，未固定时查询当前语音实验会话。`moss_status` 只表示服务可用，不代表设备就绪。桥接不提供真机执行工具。
 
-工具包含 `moss_status`、`moss_experiment_status`、`moss_delegate` 和 `moss_task_status`。`moss_experiment_status` 要求调用方提供实验 ID，仅查询所选会话内当前版本和最多 20 项最新检查状态，不返回协议、会话内容或检查结果。检查记录是存储数据，不证明设备就绪或运行安全。`moss_delegate` 以不超过 8000 字节的文字委派到第一个工作区中使用 Agent 模式的新会话，标题为带时间戳的小智委派实验，并以 `来自小智的委派：…` 提交给本地网页 Agent；委派内容在网页会话列表中可见，该会话的实验动画也会在此打开。同一时刻只允许一个委派任务在执行；内存中最多保留 100 条已完成任务。`moss_task_status` 按任务 ID 返回 `running`、`completed`、`error` 或 `timeout`；`completed` 携带 Agent 的最终答复文字（最多 4000 字符），`timeout` 表示五分钟等待已超时；任务仍视为活跃并阻止新的委派，直到收到其终态事件。桥接会继续跟踪任务并在结束时更新状态。提交报错时任务是否已入队可能无法确定；返回的任务会继续保持活跃并被跟踪，使用者应查看网页会话。如果始终没有收到终态事件，该任务会占用并发名额直到桥接关闭。关闭桥接会停止跟踪，但不会停止网页任务；任务结果可能未知。任务记录保存在内存中，重启后丢失。
+认证 Connection 提供 `GET /api/xiaozhi-workbench`，返回最新导航序号、会话、任务、状态及答复。网页每接收一条新消息只自动跟随一次，预览就绪前先打开实验区；轮询不会反复抢走用户选择。`POST /api/xiaozhi-workbench/message` 接受 JSON `{message, newExperiment?}`，作为调用同一委派服务的本地文字入口，要求同源 Origin 头，拒绝任意会话身份及其他来源网页的请求，不增加 Agent 权限。
 
-委派内容以网页 Agent 的全部本地权限在新建工作区会话中执行；小智不提供已验证的用户身份，因此委派仅限运行网页应用的同一受信任使用者。此插件不公开真机控制。
+此功能面向单操作员。小智接入点不提供已验证的人类身份；持有接入凭据者可以网页 Agent 现有的本地权限提交工作。会话归属检查不是用户认证。部署者须保密接入地址并避免重复启动桥接实例。暂不提供主动通知或语音播报通道。
 
-本地测试不建立外部连接，在 `LabScriptAI-OT-V3` 应用目录运行：
+在项目根目录使用 Node 24.9 或更高版本运行针对性测试：
 
 ```sh
-node --import tsx/esm --test internal/xiaozhi/bridge.test.mjs internal/xiaozhi/delegation.test.mjs
+node --import tsx/esm --test internal/xiaozhi/*.test.mjs
 ```
 
-还需要验证小智硬件的工具调用、会话身份绑定和重连行为；如需主动播报，还须确认平台提供的通知接口并单独实现验证。
+硬件收音识别、托管小智服务的工具选择及断线恢复仍须单独用实际设备验证。本地 HTTP/MCP 注入和浏览器验证不代表这些能力或机器人就绪。

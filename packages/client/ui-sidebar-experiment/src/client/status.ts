@@ -14,6 +14,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     experimentwatch: { readonly status: 'waiting' | 'checking' } | Ready
     /** One on-demand, read-only robot status query. */
     robotstatus: RobotStatus
+    /** Current voice task, shared with the local web workbench. */
+    voiceworkbench: VoiceWorkbenchStatus
   }
 }
 
@@ -26,6 +28,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   }
 }
 
+/** Read-only device snapshot returned after an explicit status query. */
 export type RobotStatus = {
   readonly status: 'not_configured' | 'unreachable' | 'partial' | 'ready'
   readonly queriedAt: string
@@ -45,9 +48,9 @@ export const robotStatusProvider: ResourceProvider<'robotstatus'> = {
       if (!response.ok) throw new Error('Status request failed')
       const value: unknown = await response.json()
       if (!isRobotStatus(value)) throw new Error('Invalid robot status')
-      if (!signal.aborted) yield { ok: true, value }
+      if (isActive(signal)) yield { ok: true, value }
     } catch {
-      if (!signal.aborted) yield { ok: false, error: new RemoteError('experiment/robot-unavailable', 'Robot status is unavailable.', {}) }
+      if (isActive(signal)) yield { ok: false, error: new RemoteError('experiment/robot-unavailable', 'Robot status is unavailable.', {}) }
     }
   },
 }
@@ -72,9 +75,9 @@ function parseStatus(value: unknown): { readonly status: 'waiting' | 'checking' 
 
 function delay(signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
-    if (signal.aborted) { resolve(); return }
+    if (!isActive(signal)) { resolve(); return }
     const finish = (): void => { clearTimeout(timer); signal.removeEventListener('abort', finish); resolve() }
-    const timer = setTimeout(finish, 5000)
+    const timer = setTimeout(finish, 1000)
     signal.addEventListener('abort', finish, { once: true })
   })
 }
@@ -84,7 +87,7 @@ export const watchProvider: ResourceProvider<'experimentwatch'> = {
   protocol: 'experimentwatch',
   async *open(address, { signal }) {
     const session = decodeURIComponent(new URL(address).pathname.slice(1))
-    while (!signal.aborted) {
+    while (isActive(signal)) {
       try {
         if (!session) throw new Error('Missing session')
         const params = new URLSearchParams({ resource: 'status', session })
@@ -92,9 +95,9 @@ export const watchProvider: ResourceProvider<'experimentwatch'> = {
         if (!response.ok) throw new Error('Status request failed')
         const status = parseStatus(await response.json())
         if (status === undefined) throw new Error('Invalid status response')
-        if (!signal.aborted) yield { ok: true, value: status }
+        if (isActive(signal)) yield { ok: true, value: status }
       } catch {
-        if (!signal.aborted) yield { ok: false, error: new RemoteError('experiment/status-unavailable', 'Experiment status is unavailable.', {}) }
+        if (isActive(signal)) yield { ok: false, error: new RemoteError('experiment/status-unavailable', 'Experiment status is unavailable.', {}) }
       }
       await delay(signal)
     }
@@ -106,7 +109,7 @@ export const statusProvider: ResourceProvider<'experimentstatus'> = {
   protocol: 'experimentstatus',
   async *open(address, { signal }) {
     let previous: Ready | undefined
-    while (!signal.aborted) {
+    while (isActive(signal)) {
       try {
         const url = new URL(address)
         const demo = url.searchParams.get('mode') === 'demo'
@@ -123,20 +126,20 @@ export const statusProvider: ResourceProvider<'experimentstatus'> = {
         if (status === undefined) throw new Error('Invalid status response')
         if (status.status !== 'ready') {
           previous = undefined
-          if (!signal.aborted) yield { ok: true, value: status }
+          if (isActive(signal)) yield { ok: true, value: status }
         } else if (previous?.id !== status.id || previous.revision !== status.revision || previous.task !== status.task) {
           previous = undefined
-          if (!signal.aborted) yield { ok: true, value: { status: 'checking' } }
+          if (isActive(signal)) yield { ok: true, value: { status: 'checking' } }
           const bundle = await fetchPreviewBundle(session, status.id, status.revision, status.task, signal, endpoint)
           const document = createPreviewDocument(bundle, session, status.id, status.revision, status.task, endpoint)
-          if (!signal.aborted) {
+          if (isActive(signal)) {
             previous = status
             yield { ok: true, value: { ...status, document } }
           }
         }
       } catch {
         previous = undefined
-        if (!signal.aborted) yield {
+        if (isActive(signal)) yield {
           ok: false,
           error: new RemoteError('experiment/status-unavailable', 'Experiment status is unavailable.', {}),
         }
@@ -145,3 +148,47 @@ export const statusProvider: ResourceProvider<'experimentstatus'> = {
     }
   },
 }
+
+/** Latest accepted voice message; completing a turn does not mean an experiment ran. */
+export type VoiceWorkbenchStatus = {
+  readonly sequence: number
+  readonly sessionId: string | null
+  readonly jobId: string | null
+  readonly status: 'idle' | 'running' | 'completed' | 'error' | 'timeout'
+  readonly result: string | null
+}
+
+/** Observe the voice task without creating a second conversation or model turn. */
+export const voiceWorkbenchProvider: ResourceProvider<'voiceworkbench'> = {
+  protocol: 'voiceworkbench',
+  async *open(_address, { signal }) {
+    while (isActive(signal)) {
+      try {
+        const response = await fetch('/api/xiaozhi-workbench', { signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]), credentials: 'same-origin', cache: 'no-store' })
+        if (!response.ok) throw new Error('Voice task unavailable')
+        const value: unknown = await response.json()
+        if (!isVoiceWorkbenchStatus(value)) throw new Error('Invalid voice task')
+        if (isActive(signal)) yield { ok: true, value }
+      } catch {
+        if (isActive(signal)) yield { ok: false, error: new RemoteError('experiment/status-unavailable', 'Voice task is unavailable.', {}) }
+      }
+      await new Promise<void>((resolve) => {
+        if (!isActive(signal)) { resolve(); return }
+        const finish = (): void => { clearTimeout(timer); signal.removeEventListener('abort', finish); resolve() }
+        const timer = setTimeout(finish, 1000)
+        signal.addEventListener('abort', finish, { once: true })
+      })
+    }
+  },
+}
+
+function isVoiceWorkbenchStatus(value: unknown): value is VoiceWorkbenchStatus {
+  if (typeof value !== 'object' || value === null) return false
+  return 'sequence' in value && Number.isSafeInteger(value.sequence) && Number(value.sequence) >= 0
+    && 'status' in value && ['idle', 'running', 'completed', 'error', 'timeout'].includes(String(value.status))
+    && 'sessionId' in value && (value.sessionId === null || (typeof value.sessionId === 'string' && value.sessionId.length > 0))
+    && 'jobId' in value && (value.jobId === null || typeof value.jobId === 'string')
+    && 'result' in value && (value.result === null || typeof value.result === 'string')
+}
+
+function isActive(signal: AbortSignal): boolean { return !signal.aborted }

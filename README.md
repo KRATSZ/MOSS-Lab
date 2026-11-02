@@ -91,7 +91,7 @@ The runtime reads its configuration from the root `.env` file:
 | `AI_API_KEY` | Required | Authentication token for your OpenAI-compatible model service | `sk-xxxxxx` |
 | `AI_API_URL` | Required | Target HTTPS chat completion endpoint URL | `https://api.deepseek.com/v1/chat/completions` |
 | `AI_MODEL` | Required | Model designation identifier to invoke | `deepseek-chat` |
-| `XIAOZHI_WSS_URL` | Required | Private WebSocket URL for Xiaozhi MCP communication | `wss://api.example.com/mcp?token=xxx` |
+| `XIAOZHI_WSS_URL` | Optional | Private WebSocket URL for Xiaozhi MCP communication | `wss://api.example.com/mcp?token=xxx` |
 | `OPENTRONS_URL` | Optional | Address of the target Opentrons robot server | `http://192.168.1.100:31950` |
 
 ## Project Layout

@@ -16,8 +16,8 @@ const tools = [
   },
   {
     name: 'moss_delegate',
-    description: '将用户的实验需求委派给本地网页 Agent，返回任务编号和网页会话；完成后用 moss_task_status 查询。不会授权真实设备运行。',
-    inputSchema: { type: 'object', properties: { message: { type: 'string', minLength: 1, maxLength: 8000, description: '用户提出的完整任务和已知实验条件。' } }, required: ['message'], additionalProperties: false },
+    description: '把用户原话交给当前实验 Agent，包括补充条件和修改刚才方案。默认继续同一实验；仅当用户明确要新实验时设 newExperiment=true。返回后用 moss_task_status 查询答复，不代表实验运行完成。',
+    inputSchema: { type: 'object', properties: { newExperiment: { type: 'boolean', description: '仅当用户明确要求另开新实验时为 true，普通补充和修改保持 false。' }, message: { type: 'string', minLength: 1, maxLength: 8000, description: '用户提出的完整任务和已知实验条件。' } }, required: ['message'], additionalProperties: false },
   },
   {
     name: 'moss_task_status',
@@ -61,16 +61,17 @@ export async function handleMessage(message, store, sessionId, delegation) {
   }
   if (name === 'moss_delegate' || name === 'moss_task_status') {
     const key = name === 'moss_delegate' ? 'message' : 'jobId'
-    if (Object.keys(args).length !== 1 || typeof args[key] !== 'string' || !args[key].trim() || args[key].length > (name === 'moss_delegate' ? 8000 : 128)) return failure(id, -32602, 'Invalid tool arguments')
+    if ((name === 'moss_delegate' ? Object.keys(args).some(key => !['message', 'newExperiment'].includes(key)) || (args.newExperiment !== undefined && typeof args.newExperiment !== 'boolean') : Object.keys(args).length !== 1) || typeof args[key] !== 'string' || !args[key].trim() || args[key].length > (name === 'moss_delegate' ? 8000 : 128)) return failure(id, -32602, 'Invalid tool arguments')
     if (!delegation) return response(id, text({ error: '委派服务不可用。' }, true))
     try {
-      return response(id, text(name === 'moss_delegate' ? await delegation.submit(args.message) : delegation.get(args.jobId)))
+      return response(id, text(name === 'moss_delegate' ? await delegation.submit(args.message, { newExperiment: args.newExperiment ?? false }) : delegation.get(args.jobId)))
     } catch (error) {
       return response(id, text({ error: String(error.message).slice(0, 300) }, true))
     }
   }
   if (name !== 'moss_experiment_status') return failure(id, -32602, 'Unknown tool')
   if (Object.keys(args).length !== 1 || typeof args.id !== 'string' || !args.id.trim() || args.id.length > 128) return failure(id, -32602, 'Invalid tool arguments')
+  sessionId = delegation?.activeSessionId?.() ?? sessionId
   if (sessionId === null) return response(id, text({ error: '尚未绑定网页实验会话。' }, true))
   try {
     const experiment = await store.getForSession(sessionId, args.id)

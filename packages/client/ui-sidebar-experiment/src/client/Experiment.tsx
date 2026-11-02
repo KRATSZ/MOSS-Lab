@@ -15,11 +15,16 @@ export function ExperimentBody({ t, useResource, useTabInfo, sessionId }: PropsL
   const watched = useResource<'experimentwatch'>(`dsh-resource://experimentwatch/${encodeURIComponent(sessionId)}`)
   const task = watched.status === 'live' && watched.value !== undefined ? (watched.value.status === 'ready' ? watched.value.task : null) : undefined
   const demo = demoTask !== undefined && (task == null || task === demoTask)
-  const address = `dsh-resource://experimentstatus/${encodeURIComponent(sessionId)}/${encodeURIComponent(tab.id)}/${generation}`
+  const voice = useResource<'voiceworkbench'>('dsh-resource://voiceworkbench/current')
+  const voiceTask = voice.value?.sessionId === sessionId ? voice.value : undefined
+  const receipt = voiceTask ? `/${voiceTask.sequence}/${voiceTask.status}` : ''
+  const address = `dsh-resource://experimentstatus/${encodeURIComponent(sessionId)}/${encodeURIComponent(tab.id)}/${generation}${receipt}`
   const resource = useResource<'experimentstatus'>(demo ? `${address}?mode=demo` : address)
-  const ready = resource.status === 'live' && resource.value?.status === 'ready' ? resource.value : undefined
-  const failed = resource.status === 'failed' || resource.status === 'none'
-  const message = failed ? t('error')
+  const updating = voiceTask?.status === 'running' || voiceTask?.status === 'timeout'
+  const voiceUnavailable = voice.status === 'failed' || voice.status === 'none'
+  const ready = resource.status === 'live' && resource.value?.status === 'ready' && !updating && !voiceUnavailable ? resource.value : undefined
+  const failed = voiceUnavailable || resource.status === 'failed' || resource.status === 'none'
+  const message = failed ? t('error') : updating ? t('voiceWorking')
     : resource.status === 'loading' || resource.value?.status === 'checking' ? t('checking') : demo ? t('demoWaiting') : t('waiting')
   return (
     <div className={css.preview}>
@@ -29,9 +34,9 @@ export function ExperimentBody({ t, useResource, useTabInfo, sessionId }: PropsL
         <div>{t('demoUnavailable')}</div>
       </div>}
       <div className={css.toolbar}>
-        <Button size="sm" variant="outline" onClick={() => setDemoTask(demo ? undefined : task ?? null)}>{t(demo ? 'returnToExperiment' : 'viewDemo')}</Button>
-        <Button size="sm" variant="outline" onClick={() => setGeneration(value => value + 1)}>{t('refresh')}</Button>
-        <Button size="sm" variant="outline" onClick={() => setRobotGeneration(value => value + 1)}>{t('robotQuery')}</Button>
+        <Button size="sm" variant="outline" onClick={() =>{  setDemoTask(demo ? undefined : task ?? null) }}>{t(demo ? 'returnToExperiment' : 'viewDemo')}</Button>
+        <Button size="sm" variant="outline" onClick={() =>{  setGeneration(value => value + 1) }}>{t('refresh')}</Button>
+        <Button size="sm" variant="outline" onClick={() =>{  setRobotGeneration(value => value + 1) }}>{t('robotQuery')}</Button>
       </div>
       {robotGeneration > 0 && <div className={css.robotInfo} role="status">
         {robot.status === 'failed' || robot.status === 'none' ? t('robotUnavailable')
@@ -46,6 +51,8 @@ export function ExperimentBody({ t, useResource, useTabInfo, sessionId }: PropsL
               <div>{t('robotTime')}: {new Date(robotValue.queriedAt).toLocaleString()}</div>
             </>}
       </div>}
+      {voiceTask?.status === 'error' && <div className={css.robotInfo} role="alert">{t('voiceFailed')} {voiceTask.result}</div>}
+      {ready && <div className={css.robotInfo} data-experiment-revision={ready.revision}>{t('revision')} {ready.revision}</div>}
       {ready
         ? <iframe className={css.frame} title={t('title')} sandbox="allow-scripts" srcDoc={ready.document} />
         : <div className={css.waiting}><div role={failed ? 'alert' : 'status'}>{message}</div></div>}
