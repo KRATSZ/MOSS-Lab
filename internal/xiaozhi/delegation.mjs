@@ -92,7 +92,7 @@ export function createDelegation({ controller, workspaces, events, timeoutMs = 3
         }
         if (event.type === 'turn/end') {
           if (event.data.reason?.kind === 'completed' && finalText.trim()) finish('completed', finalText)
-          else finish('error', '任务未正常完成：' + (event.data.reason?.kind ?? '未知原因') + '；请查看网页会话')
+          else finish('error', event.data.reason?.kind === 'aborted' ? '本次生成已停止' : '生成未完成，请查看对话中的说明')
         }
       }, { global: true })
       timer = setTimeout(() => { if (observing) { job.status = 'timeout'; job.result = '等待结果超时，仍在跟踪，请查看网页会话'; changed() } }, timeoutMs)

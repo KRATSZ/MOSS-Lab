@@ -194,3 +194,16 @@ test('MCP delegates and reports task errors without accepting a session argument
     assert.equal(error.result.isError, true)
   } finally { f.delegation.close() }
 })
+
+
+test('a stopped turn reports its outcome in plain language', async () => {
+  const f = fixture()
+  try {
+    const receipt = await f.delegation.submit('read-only explanation')
+    claimAndEnd(f, f.request, 'aborted')
+    const result = f.delegation.get(receipt.jobId)
+    assert.equal(result.status, 'error')
+    assert.equal(result.result, '本次生成已停止')
+    assert.equal(f.listeners.size, 0)
+  } finally { f.delegation.close() }
+})
