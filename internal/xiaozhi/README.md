@@ -10,7 +10,7 @@ Voice delegation uses the `moss-experiment` preset named **实验助手**, with 
 
 `moss_task_status(jobId)` returns the observed Agent turn's state and final text, bounded to 4000 characters. `completed` means the Agent replied, including a clarification question; it never means a robot experiment completed. Only one delegated turn may be active. A timeout continues observation and keeps the concurrency slot until a terminal event. An ambiguous submission is kept observable. Shutdown stops observation, not the Agent. Job receipts are in memory and are lost on restart.
 
-`moss_experiment_status(id)` reads the configured session, or the active delegated conversation when none was fixed. `moss_status` reports service availability, not hardware readiness. No robot execution tool is exposed by this bridge.
+`moss_experiment_status(id)` reads the active delegated conversation, falling back to the configured initial session before delegation. `moss_status` reports service availability, not hardware readiness. No robot execution tool is exposed by this bridge.
 
 The same authenticated Connection carrier serves `GET /api/xiaozhi-workbench` with the latest navigation sequence, session, job, status and result. The Web client follows each accepted message once and opens its experiment panel before a preview is ready. Status polls do not repeatedly change the user's selection. `POST /api/xiaozhi-workbench/message` accepts JSON `{message, newExperiment?}` as a local text fallback through the same delegation service; a same-origin Origin header is required, and arbitrary session identities are rejected. It does not grant additional Agent permissions.
 
@@ -23,3 +23,5 @@ node --import tsx/esm --test internal/xiaozhi/*.test.mjs
 ```
 
 Hardware microphone recognition, the hosted endpoint's tool selection and disconnect recovery require separate physical-device verification. Local HTTP/MCP injection and browser checks do not establish those behaviors or robot readiness.
+
+The browser workbench must remain open. An incoming voice message does not launch a closed browser or bring a background window to the foreground.

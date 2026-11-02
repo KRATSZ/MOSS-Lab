@@ -10,7 +10,7 @@
 
 `moss_task_status(jobId)` 返回所跟踪 Agent 轮次的状态和最终答复，文字最多 4000 字符。`completed` 只表示 Agent 已回复，包括追问，绝不表示真机实验完成。同一时刻只接受一个语音委派轮次。超时后继续跟踪并占用并发名额，直到收到终态；提交结果不确定时仍保留跟踪。关闭服务只停止观察，不停止网页 Agent。任务回执保存在内存中，重启后丢失。
 
-`moss_experiment_status(id)` 查询部署者指定的会话，未固定时查询当前语音实验会话。`moss_status` 只表示服务可用，不代表设备就绪。桥接不提供真机执行工具。
+`moss_experiment_status(id)` 查询当前语音实验会话；尚未委派时回退到部署者指定的初始会话。`moss_status` 只表示服务可用，不代表设备就绪。桥接不提供真机执行工具。
 
 认证 Connection 提供 `GET /api/xiaozhi-workbench`，返回最新导航序号、会话、任务、状态及答复。网页每接收一条新消息只自动跟随一次，预览就绪前先打开实验区；轮询不会反复抢走用户选择。`POST /api/xiaozhi-workbench/message` 接受 JSON `{message, newExperiment?}`，作为调用同一委派服务的本地文字入口，要求同源 Origin 头，拒绝任意会话身份及其他来源网页的请求，不增加 Agent 权限。
 
@@ -23,3 +23,5 @@ node --import tsx/esm --test internal/xiaozhi/*.test.mjs
 ```
 
 硬件收音识别、托管小智服务的工具选择及断线恢复仍须单独用实际设备验证。本地 HTTP/MCP 注入和浏览器验证不代表这些能力或机器人就绪。
+
+浏览器工作台须保持打开。语音消息暂不会启动已关闭的浏览器，也不会把后台窗口切到前台。
