@@ -6,7 +6,6 @@ import { createDelegation } from './delegation.mjs'
 import { registerWorkbench } from './workbench-route.mjs'
 import { createWorkbenchWakeup } from './workbench-wakeup.mjs'
 import { createVoiceFeedback } from './voice-feedback.mjs'
-import { createCompletionNotifier } from './completion-notifier.mjs'
 
 export const name = 'xiaozhi-readonly'
 export const inject = ['experimentStore', 'sessionController', 'workspaceRegistry', 'connection', 'sessionPersistence', 'webServer', 'agents', 'experimentPreview']
@@ -57,10 +56,6 @@ export function apply(ctx, config) {
       catch { console.warn('xiaozhi diagnostics could not be saved') }
     }
     const recordSpeech = result => { record({ kind: 'speech_decision', jobId: result.jobId, cycleId: result.cycleId, phase: result.phase, speak: result.speech.speak, reason: result.speech.reason, waitingCount: result.speech.waitingCount, at: Date.now() }); return result }
-    if (!['sampling', 'watch'].includes(config.feedback.completionMode)) throw new Error('xiaozhi completionMode must be sampling or watch')
-    const notifications = createCompletionNotifier({ delegation, feedback,
-      supported: () => config.feedback.completionMode === 'sampling' && disconnect?.snapshot().status === 'ready' && disconnect.snapshot().clientCapabilities?.sampling === true,
-      send: (text, options) => disconnect.sampleMessage(text, options), record })
     const workbench = {
       ...delegation,
       async submit(message, options) {
@@ -71,7 +66,7 @@ export function apply(ctx, config) {
       voiceReceipt: id => recordSpeech(feedback.receipt(id)),
       voiceStatus: async (id, options) => recordSpeech(await feedback.status(id, options)),
       workbench() {
-        return { ...delegation.workbench(), connection: disconnect?.snapshot() ?? { status: 'not_configured', registered: false, reconnects: 0, lastCall: null }, wakeup: wakeup.state(), speechPolicy: { ...feedback.snapshot(), completionMode: config.feedback.completionMode }, completionNotification: notifications.state() }
+        return { ...delegation.workbench(), connection: disconnect?.snapshot() ?? { status: 'not_configured', registered: false, reconnects: 0, lastCall: null }, wakeup: wakeup.state(), speechPolicy: feedback.snapshot() }
       },
     }
     let reportedConnectionStatus
@@ -80,13 +75,12 @@ export function apply(ctx, config) {
       if (endpoint) disconnect = connectBridge({ url: endpoint, sessionId: config.sessionId, store: ctx.experimentStore, delegation: workbench, ...config.transport,
         onState: (status, state) => {
           record({ ...state, source: 'xiaozhi-mcp' })
-          if (status === 'ready') notifications.refresh()
           if (status !== reportedConnectionStatus && ['ready', 'retrying', 'connection_error'].includes(status)) console.info('xiaozhi MCP:', status)
           reportedConnectionStatus = status
         } })
     } catch (error) {
-      stopChanges(); stopPreview(); feedback.close(); void notifications.close(); void unregister?.(); void wakeup.close(); delegation.close(); throw error
+      stopChanges(); stopPreview(); feedback.close(); void unregister?.(); void wakeup.close(); delegation.close(); throw error
     }
-    return async () => { stopChanges(); stopPreview(); const stoppedNotifications = notifications.close(); feedback.close(); delegation.close(); const stoppedWake = wakeup.close(); await unregister?.(); await disconnect?.(); await stoppedNotifications; await stoppedWake }
+    return async () => { stopChanges(); stopPreview(); feedback.close(); delegation.close(); const stoppedWake = wakeup.close(); await unregister?.(); await disconnect?.(); await stoppedWake }
   }, 'xiaozhi-readonly.connection')
 }

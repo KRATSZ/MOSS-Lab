@@ -24,7 +24,7 @@ export function workbenchRoute(delegation) {
       if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !['message', 'newExperiment'].includes(key))) throw new Error('请求参数无效')
       return Response.json(await delegation.submit(body.message, { newExperiment: body.newExperiment === undefined ? false : body.newExperiment }), { headers })
     } catch (error) {
-      return Response.json({ error: String(error.message).slice(0, 300) }, { status: /正在执行/.test(error.message) ? 409 : 400, headers })
+      return Response.json({ error: String(error.message).slice(0, 300) }, { status: 400, headers })
     }
   }
 }

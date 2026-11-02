@@ -146,7 +146,6 @@ describe('experiment animation entry', () => {
     fireEvent.click(screen.getByRole('button', { name: zh.viewDemo }))
     expect(screen.getByText(zh.demoLabel)).toBeTruthy()
     expect(screen.getByText(zh.demoControls)).toBeTruthy()
-    expect(screen.getByText(zh.demoUnavailable)).toBeTruthy()
     expect(view.container.querySelector('iframe')?.getAttribute('srcdoc')).toBe('<p>demo</p>')
     expect(addresses.filter(address => address.startsWith('dsh-resource://experimentstatus/')).at(-1)).toContain('?mode=demo')
     fireEvent.click(screen.getByRole('button', { name: zh.returnToExperiment }))

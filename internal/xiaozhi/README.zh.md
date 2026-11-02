@@ -14,7 +14,9 @@
 
 认证 Connection 提供 `GET /api/xiaozhi-workbench`，返回最新导航序号、会话、任务、状态及答复，以及不含凭据的 `connection` 和 `wakeup` 诊断。`connection.status=ready` 表示接入点已请求并收到工具清单，不表示实体麦克风已经验证。网页只在首次打开、追问必要条件及当前检查通过的预览就绪时跟随 `focusSequence`；普通改口和轮询保留用户选择。准备替代方案时隐藏旧预览，当前精确版本检查通过后可在 Agent 结束答复前显示。`POST /api/xiaozhi-workbench/message` 接受 JSON `{message, newExperiment?}`，作为调用同一委派服务的本地文字入口，要求同源 Origin 头，拒绝任意会话身份及其他来源网页的请求，不增加 Agent 权限。
 
-此功能面向单操作员。小智接入点不提供已验证的人类身份；持有接入凭据者可以网页 Agent 现有的本地权限提交工作。会话归属检查不是用户认证。部署者须保密接入地址并避免重复启动桥接实例。每个任务周期最多给出三次自动等待确认，偏移为 0、15、45 秒；提前完成不补齐提示。改口共用预算，终态之后的新任务重置预算；达到上限后工具明确要求安静。完成时只保留一句简短提醒，用户主动询问进度另算。实际播报仍由托管模型控制，须通过设备验证。默认 `feedback.completionMode=watch` 依靠当前语音会话的任务状态跟踪；`sampling` 在接入点声明支持时还尝试服务端 `sampling/createMessage`。接入点确认不等于扬声器实际播放，发送结果未知时不重播。两种模式均不能据此认定支持空闲设备主动推送。
+此功能面向单操作员。小智接入点不提供已验证的人类身份；持有接入凭据者可以网页 Agent 现有的本地权限提交工作。会话归属检查不是用户认证。部署者须保密接入地址并避免重复启动桥接实例。
+
+每个任务周期最多给出三次自动等待确认，偏移为 0、15、45 秒；提前完成不补齐提示。改口共用预算，终态之后的新任务重置预算；达到上限后工具明确要求安静。完成时只保留一句简短提醒，用户主动询问进度另算。实际播报仍由托管模型控制，须通过设备验证。完成提醒通过当前语音对话中的任务状态查询交付，不提供空闲设备主动播报通道。
 
 在项目根目录使用 Node 24.9 或更高版本运行针对性测试：
 
@@ -26,4 +28,4 @@ node --import tsx/esm --test internal/xiaozhi/*.test.mjs
 
 macOS 默认在首次接受委派时打开工作台（`MOSS_AUTO_WAKE=1`）；`MOSS_BROWSER_APP` 可选 Google Chrome（默认）、Microsoft Edge 或 Safari。服务复用同一本地来源的标签页，恢复最小化窗口；匹配的标签页均已关闭时才新开窗口。服务重启后的首次唤起会重新认证标签页，后续普通改口只检查标签页是否存在，不置前、不刷新；标签页缺失时重新打开。追问条件及当前预览就绪时恢复窗口并置前。macOS 可能要求操作员允许浏览器自动化。授权登录地址通过标准输入交给本地助手，不进入命令参数或日志。唤起失败或关闭自动唤起都不会取消已接受的任务；`wakeup` 保留状态与原因，失败也会留下不含凭据的日志。其他操作系统启用此功能时返回 `unsupported_platform`，可保持网页打开或关闭自动唤起。
 
-部署配置可调整 `transport.reconnectMinMs`、`reconnectMaxMs`、`connectTimeoutMs`、`heartbeatMs`、`samplingTimeoutMs`、`feedback.offsetsMs`、`pollWaitMs`、`completionMode` 及 `wakeup.enabled`、`browserApp`、`timeoutMs`；这些参数只影响连接维护和可信本地浏览器助手，不增加 Agent 工具权限。
+部署配置可调整 `transport.reconnectMinMs`、`reconnectMaxMs`、`connectTimeoutMs`、`heartbeatMs`、`feedback.offsetsMs`、`pollWaitMs` 及 `wakeup.enabled`、`browserApp`、`timeoutMs`；这些参数只影响连接维护和可信本地浏览器助手，不增加 Agent 工具权限。

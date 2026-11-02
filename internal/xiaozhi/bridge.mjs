@@ -1,5 +1,4 @@
 import WebSocket from 'ws'
-import { randomUUID } from 'node:crypto'
 
 const tools = [
   {
@@ -95,27 +94,18 @@ export async function handleMessage(message, store, sessionId, delegation, conte
  * @param {object} options Endpoint, store, delegation and configurable transport budgets.
  * @returns {Function} Async disposer with a credential-free snapshot method.
  */
-export function connectBridge({ url, sessionId, store, delegation, WebSocketClass = WebSocket, onState = () => {}, reconnectMinMs = 1000, reconnectMaxMs = 30000, connectTimeoutMs = 10000, heartbeatMs = 20000, samplingTimeoutMs = 15000 }) {
+export function connectBridge({ url, sessionId, store, delegation, WebSocketClass = WebSocket, onState = () => {}, reconnectMinMs = 1000, reconnectMaxMs = 30000, connectTimeoutMs = 10000, heartbeatMs = 20000 }) {
   if (sessionId !== null && (typeof sessionId !== 'string' || !sessionId.trim())) throw new Error('xiaozhi requires a fixed session ID or null')
   let parsed
   try { parsed = new URL(url) } catch { throw new Error('xiaozhi endpoint is invalid') }
   if (parsed.protocol !== 'wss:' || parsed.username || parsed.password || parsed.hash) throw new Error('xiaozhi endpoint must be a secure WebSocket URL without userinfo or fragment')
   if (!store || typeof store.getForSession !== 'function' || typeof store.getChecksForSession !== 'function') throw new Error('xiaozhi requires the session-scoped experiment store')
-  if (![reconnectMinMs, reconnectMaxMs, connectTimeoutMs, heartbeatMs, samplingTimeoutMs].every(value => Number.isSafeInteger(value) && value > 0) || reconnectMaxMs < reconnectMinMs) throw new Error('xiaozhi transport budgets must be positive, with reconnectMaxMs >= reconnectMinMs')
+  if (![reconnectMinMs, reconnectMaxMs, connectTimeoutMs, heartbeatMs].every(value => Number.isSafeInteger(value) && value > 0) || reconnectMaxMs < reconnectMinMs) throw new Error('xiaozhi transport budgets must be positive, with reconnectMaxMs >= reconnectMinMs')
   let socket, retryTimer, heartbeatTimer
   let attempts = 0
   let disposed = false
   let state = { status: 'connecting', reconnects: 0, registered: false, lastCall: null, updatedAt: Date.now() }
   const pending = new Set()
-  const outbound = new Map()
-  const sampleError = code => Object.assign(new Error('小智主动通知未被确认，请查看电脑工作台。'), { code })
-  const settleSample = (id, error, value) => {
-    const entry = outbound.get(id)
-    if (!entry) return
-    clearTimeout(entry.timer); outbound.delete(id)
-    entry.stop?.()
-    if (error) entry.reject(error); else entry.resolve(value)
-  }
   const snapshot = () => ({ ...state, lastCall: state.lastCall === null ? null : { ...state.lastCall } })
   const notify = (status, extra = {}) => {
     state = { ...state, ...extra, status, updatedAt: Date.now() }
@@ -144,7 +134,6 @@ export function connectBridge({ url, sessionId, store, delegation, WebSocketClas
     current.addEventListener('close', () => {
       if (socket !== current) return
       for (const request of requests.values()) request.abort()
-      for (const [id, entry] of outbound) if (entry.socket === current) settleSample(id, sampleError('SAMPLING_OUTCOME_UNKNOWN'))
       clearInterval(heartbeatTimer)
       if (!disposed) scheduleRetry()
     })
@@ -157,25 +146,16 @@ export function connectBridge({ url, sessionId, store, delegation, WebSocketClas
         else {
           try { message = JSON.parse(event.data) } catch { answer = failure(null, -32700, 'Parse error') }
           if (message?.method === 'notifications/cancelled') { requests.get(JSON.stringify(message.params?.requestId))?.abort(); return }
-          if (message && message.method === undefined && (Object.hasOwn(message, 'result') || Object.hasOwn(message, 'error'))) {
-            const entry = outbound.get(message.id)
-            if (entry?.socket === current) {
-              if (message.error) settleSample(message.id, sampleError('SAMPLING_REJECTED'))
-              else if (message.result?.content?.type === 'text' && typeof message.result.content.text === 'string') settleSample(message.id, null, { acknowledged: true, text: message.result.content.text.slice(0, 512) })
-              else settleSample(message.id, sampleError('SAMPLING_INVALID_RESPONSE'))
-            }
-            return
-          }
+          if (message && message.method === undefined && (Object.hasOwn(message, 'result') || Object.hasOwn(message, 'error'))) return
           if (message?.id !== undefined && requests.has(JSON.stringify(message.id))) return
           if (message?.id !== undefined) requests.set(JSON.stringify(message.id), controller)
-          if (message?.method === 'initialize') notify(state.status, { clientCapabilities: { sampling: Boolean(message.params?.capabilities?.sampling), elicitation: Boolean(message.params?.capabilities?.elicitation) } })
           if (message !== undefined) {
             const name = message.method === 'tools/call' && tools.some(tool => tool.name === message.params?.name) ? message.params.name : null
             const receivedAt = Date.now()
             if (name !== null) notify(state.status, { lastCall: { name, status: 'received', receivedAt, source: 'xiaozhi-mcp' } })
             try { answer = await handleMessage(message, store, sessionId, delegation, { signal: controller.signal }) }
             catch { answer = failure(message?.id ?? null, -32603, 'Internal error') }
-            if (name !== null) notify(state.status, { lastCall: { name, status: answer?.error || answer?.result?.isError ? 'error' : 'replied', receivedAt, source: 'xiaozhi-mcp' } })
+            if (name !== null && !disposed && socket === current && !controller.signal.aborted) notify(state.status, { lastCall: { name, status: answer?.error || answer?.result?.isError ? 'error' : 'replied', receivedAt, source: 'xiaozhi-mcp' } })
           }
         }
         if (!disposed && !controller.signal.aborted && socket === current && answer && current.readyState === 1) {
@@ -190,7 +170,7 @@ export function connectBridge({ url, sessionId, store, delegation, WebSocketClas
         if (message?.id !== undefined && requests.get(JSON.stringify(message.id)) === controller) requests.delete(JSON.stringify(message.id))
       })()
       pending.add(operation)
-      void operation.then(() => pending.delete(operation), () => { pending.delete(operation); notify('connection_error', { registered: false }); current.terminate?.() })
+      void operation.then(() => pending.delete(operation), () => { pending.delete(operation); if (!disposed && socket === current) { notify('connection_error', { registered: false }); current.terminate?.() } })
     })
   }
   const scheduleRetry = () => {
@@ -216,28 +196,5 @@ export function connectBridge({ url, sessionId, store, delegation, WebSocketClas
     notify('stopped', { registered: false })
   }
   dispose.snapshot = snapshot
-  dispose.sampleMessage = (text, { signal = new AbortController().signal } = {}) => {
-    if (disposed || state.status !== 'ready' || socket?.readyState !== 1) return Promise.reject(sampleError('SAMPLING_UNAVAILABLE'))
-    if (!state.clientCapabilities?.sampling) return Promise.reject(sampleError('SAMPLING_UNSUPPORTED'))
-    if (typeof text !== 'string' || !text.trim() || Buffer.byteLength(text) > 2000) return Promise.reject(sampleError('SAMPLING_INVALID_TEXT'))
-    if (outbound.size >= 4) return Promise.reject(sampleError('SAMPLING_BUSY'))
-    if (signal.aborted) return Promise.reject(sampleError('SAMPLING_SUPERSEDED'))
-    const current = socket, id = 'moss-notify-' + randomUUID()
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => settleSample(id, sampleError('SAMPLING_OUTCOME_UNKNOWN')), samplingTimeoutMs)
-      const cancel = () => {
-        if (current.readyState === 1) { try { current.send(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: id, reason: 'A newer MOSS requirement superseded this notification.' } })) } catch { /* Closing transport also discards this notification. */ } }
-        settleSample(id, sampleError('SAMPLING_SUPERSEDED'))
-      }
-      signal.addEventListener('abort', cancel, { once: true })
-      outbound.set(id, { socket: current, timer, resolve, reject, stop: () => signal.removeEventListener('abort', cancel) })
-      try {
-        current.send(JSON.stringify({ jsonrpc: '2.0', id, method: 'sampling/createMessage', params: {
-          messages: [{ role: 'user', content: { type: 'text', text: 'MOSS电脑端事件通知。请只向用户播报下面这句话，不调用工具、不查询状态、不补充解释：\n' + text } }],
-          includeContext: 'none', systemPrompt: 'Only deliver the supplied short MOSS notification. Do not call tools or add a summary.', maxTokens: 256, temperature: 0,
-        } }))
-      } catch { settleSample(id, sampleError('SAMPLING_OUTCOME_UNKNOWN')) }
-    })
-  }
   return dispose
 }

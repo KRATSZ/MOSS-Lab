@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { VoiceWorkbench, createVoiceNavigationStore } from '../src/client/voice-workbench.tsx'
 import { AutoOpenExperiment, createAutoOpenStore } from '../src/client/auto-open.tsx'
 import { ExperimentBody } from '../src/client/Experiment.tsx'
 import { voiceWorkbenchProvider } from '../src/client/status.ts'
-import { zh } from '../src/client/locales.ts'
+import { zh, en } from '../src/client/locales.ts'
 
 describe('voice experiment workbench', () => {
   it('navigates once per accepted message, not when a reply completes or the user leaves', async () => {
@@ -198,5 +198,71 @@ it('shows the missing condition instead of claiming to keep generating', () => {
   expect(screen.getByText('每孔最终体积是多少？')).toBeTruthy()
   expect(screen.getByText(zh.voiceNeedsInput)).toBeTruthy()
   expect(screen.queryByText(zh.voiceWorking)).toBeNull()
+  view.unmount()
+})
+
+
+it('keeps the published preview resource and iframe when the final reply arrives', () => {
+  let status = 'running'
+  const addresses: string[] = []
+  const props = { sessionId: 's', useTabInfo: () => ({ tab: { id: 'tab' } }), t: (key: keyof typeof zh) => zh[key],
+    useResource: (address: string) => {
+      if (address.includes('voiceworkbench')) return { status: 'live', value: { sequence: 4, sessionId: 's', status, phase: 'preview_ready', preview: { id: 'e', revision: 3 } } }
+      if (address.includes('experimentstatus')) addresses.push(address)
+      return { status: 'live', value: { status: 'ready', id: 'e', revision: 3, task: 'current', document: '<p>current simulation</p>' } }
+    } } as Parameters<typeof ExperimentBody>[0]
+  const view = render(<ExperimentBody {...props} />)
+  const frame = view.container.querySelector('iframe')
+  const address = addresses.at(-1)
+  status = 'completed'
+  view.rerender(<ExperimentBody {...props} />)
+  expect(addresses.at(-1)).toBe(address)
+  expect(view.container.querySelector('iframe')).toBe(frame)
+  expect(frame?.getAttribute('srcdoc')).toContain('current simulation')
+  view.unmount()
+})
+
+it.each([zh, en])('shows one actionable failure instead of waiting after a failed request', (locale) => {
+  const props = { sessionId: 's', useTabInfo: () => ({ tab: { id: 'tab' } }), t: (key: keyof typeof zh) => locale[key],
+    useResource: (address: string) => ({ status: 'live', value: address.includes('voiceworkbench')
+      ? { sequence: 3, sessionId: 's', status: 'error', result: 'Local analysis failed' }
+      : { status: 'ready', id: 'e', revision: 2, task: 'old', document: 'old preview' } }) } as Parameters<typeof ExperimentBody>[0]
+  const view = render(<ExperimentBody {...props} />)
+  expect(screen.getAllByRole('alert')).toHaveLength(1)
+  expect(screen.getByRole('alert').textContent).toContain(locale.voiceFailed)
+  expect(screen.getByRole('alert').textContent).toContain('Local analysis failed')
+  expect(screen.queryByText(locale.waiting)).toBeNull()
+  expect(view.container.querySelector('iframe')).toBeNull()
+  view.unmount()
+})
+
+
+it('keeps demo playback separate from the current voice preview and returns to the real plan', () => {
+  let status = 'completed'
+  const addresses: string[] = []
+  const props = { sessionId: 's', useTabInfo: () => ({ tab: { id: 'tab' } }), t: (key: keyof typeof zh) => zh[key],
+    useResource: (address: string) => {
+      if (address.includes('voiceworkbench')) return { status: 'live', value: { sequence: 4, sessionId: 's', status, phase: 'preview_ready', preview: { id: 'e', revision: 3 } } }
+      if (address.includes('experimentwatch')) return { status: 'live', value: { status: 'ready', id: 'e', revision: 3, task: 'current' } }
+      addresses.push(address)
+      return { status: 'live', value: address.includes('mode=demo')
+        ? { status: 'ready', id: 'demo', revision: 1, task: 'demo', document: '<p>demo simulation</p>' }
+        : { status: 'ready', id: 'e', revision: 3, task: 'current', document: '<p>real plan</p>' } }
+    } } as Parameters<typeof ExperimentBody>[0]
+  const view = render(<ExperimentBody {...props} />)
+  fireEvent.click(screen.getByRole('button', { name: zh.viewDemo }))
+  expect(screen.getByText(zh.demoLabel)).toBeTruthy()
+  const frame = view.container.querySelector('iframe')
+  expect(frame?.getAttribute('srcdoc')).toContain('demo simulation')
+  const address = addresses.at(-1)
+  status = 'error'
+  view.rerender(<ExperimentBody {...props} />)
+  expect(addresses.at(-1)).toBe(address)
+  expect(view.container.querySelector('iframe')).toBe(frame)
+  expect(screen.queryByRole('alert')).toBeNull()
+  status = 'completed'
+  view.rerender(<ExperimentBody {...props} />)
+  fireEvent.click(screen.getByRole('button', { name: zh.returnToExperiment }))
+  expect(view.container.querySelector('iframe')?.getAttribute('srcdoc')).toContain('real plan')
   view.unmount()
 })

@@ -94,7 +94,6 @@ node moss-start.mjs
 | `XIAOZHI_WSS_URL` | 选填 | 用于小智硬件 MCP 双向通信的私有 WebSocket 地址 | `wss://api.example.com/mcp?token=xxx` |
 | `MOSS_AUTO_WAKE` | 选填 | 首次打开、追问或当前预览完成时置前工作台；macOS 默认 `1`，设 `0` 关闭 | `1` |
 | `MOSS_BROWSER_APP` | 选填 | macOS 复用工作台的浏览器：Google Chrome、Microsoft Edge 或 Safari | `Google Chrome` |
-| `MOSS_COMPLETION_MODE` | 选填 | `watch` 在当前语音对话跟踪完成；`sampling` 启用待设备验证的主动通知尝试 | `watch` |
 | `OPENTRONS_URL` | 选填 | 局域网内 Opentrons 机器人的服务基础地址 | `http://192.168.1.100:31950` |
 
 ## 项目结构

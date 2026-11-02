@@ -58,7 +58,7 @@ test('disposal cancels a scheduled reconnect even when construction failed', asy
   assert.equal(stop.snapshot().status, 'stopped')
 })
 
-test('late replies on an old socket cannot be sent on a replacement connection', async () => {
+test('late replies cannot be sent to a replacement socket or overwrite its call status', async () => {
   class Socket extends EventTarget {
     static sockets = []
     constructor() { super(); this.readyState = 1; this.sent = []; Socket.sockets.push(this) }
@@ -75,37 +75,16 @@ test('late replies on an old socket cannot be sent on a replacement connection',
     Socket.sockets[0].close()
     await new Promise(resolve => setTimeout(resolve, 10))
     assert.equal(Socket.sockets.length, 2)
+    Socket.sockets[1].deliver(rpc(2, 'tools/list'))
+    Socket.sockets[1].deliver(rpc(3, 'tools/call', { name: 'moss_status', arguments: {} }))
+    await new Promise(resolve => setImmediate(resolve))
+    const currentCall = stop.snapshot().lastCall
+    assert.equal(currentCall.name, 'moss_status')
+    const sent = Socket.sockets[1].sent.length
     complete({ jobId: 'j', status: 'running' })
     await new Promise(resolve => setImmediate(resolve))
-    assert.equal(Socket.sockets[1].sent.length, 0)
+    assert.equal(Socket.sockets[1].sent.length, sent)
+    assert.equal(stop.snapshot().status, 'ready')
+    assert.deepEqual(stop.snapshot().lastCall, currentCall)
   } finally { complete({ jobId: 'j' }); await stop() }
-})
-
-test('advertised sampling correlates replies and cancels superseded notifications', async () => {
-  class Socket extends EventTarget {
-    static last
-    constructor() { super(); this.readyState = 1; this.sent = []; Socket.last = this }
-    send(text) { this.sent.push(JSON.parse(text)) }
-    close() { this.readyState = 3; this.dispatchEvent(new Event('close')) }
-    deliver(value) { this.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(value) })) }
-  }
-  const stop = connectBridge({ url: 'wss://example.invalid/', sessionId: null, store, WebSocketClass: Socket })
-  const socket = Socket.last
-  try {
-    socket.deliver(rpc(1, 'initialize', { protocolVersion: '2024-11-05', capabilities: { sampling: {} } }))
-    socket.deliver(rpc(2, 'tools/list'))
-    await new Promise(resolve => setImmediate(resolve))
-    assert.equal(stop.snapshot().clientCapabilities.sampling, true)
-    const first = stop.sampleMessage('预览已更新，请看电脑。')
-    const request = socket.sent.at(-1)
-    assert.equal(request.method, 'sampling/createMessage')
-    assert.equal(request.params.includeContext, 'none')
-    socket.deliver({ jsonrpc: '2.0', id: request.id, result: { role: 'assistant', content: { type: 'text', text: '预览已更新，请看电脑。' } } })
-    assert.equal((await first).acknowledged, true)
-    const controller = new AbortController()
-    const second = stop.sampleMessage('old result', { signal: controller.signal })
-    controller.abort()
-    await assert.rejects(second, { code: 'SAMPLING_SUPERSEDED' })
-    assert.equal(socket.sent.at(-1).method, 'notifications/cancelled')
-  } finally { await stop() }
 })

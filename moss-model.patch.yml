@@ -44,13 +44,11 @@
         feedback:
           offsetsMs: [0, 15000, 45000]
           pollWaitMs: 4000
-          completionMode: !!js "process.env.MOSS_COMPLETION_MODE || 'watch'"
         transport:
           reconnectMinMs: 1000
           reconnectMaxMs: 30000
           connectTimeoutMs: 10000
           heartbeatMs: 20000
-          samplingTimeoutMs: 15000
         wakeup:
           enabled: !!js "process.env.MOSS_AUTO_WAKE === undefined ? process.platform === 'darwin' : process.env.MOSS_AUTO_WAKE === '1'"
           browserApp: !!js "process.env.MOSS_BROWSER_APP || 'Google Chrome'"

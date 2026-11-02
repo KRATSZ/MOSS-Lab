@@ -176,12 +176,7 @@ export const voiceWorkbenchProvider: ResourceProvider<'voiceworkbench'> = {
       } catch {
         if (isActive(signal)) yield { ok: false, error: new RemoteError('experiment/status-unavailable', 'Voice task is unavailable.', {}) }
       }
-      await new Promise<void>((resolve) => {
-        if (!isActive(signal)) { resolve(); return }
-        const finish = (): void => { clearTimeout(timer); signal.removeEventListener('abort', finish); resolve() }
-        const timer = setTimeout(finish, 1000)
-        signal.addEventListener('abort', finish, { once: true })
-      })
+      await delay(signal)
     }
   },
 }
