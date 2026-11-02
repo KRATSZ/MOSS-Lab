@@ -39,6 +39,17 @@ test('scene generation requires the latest matching analysis for the current rev
       const request = resource => new Request(`http://localhost/api/experiment-preview?resource=${resource}&id=${experiment.id}&revision=1&session=session&task=${task.taskId}`)
       assert.deepEqual(await (await route.fetch(request('status'))).json(), { status: 'ready', id: experiment.id, revision: 1, task: task.taskId })
       assert.ok((await (await route.fetch(request('view'))).json()).frames.length > 0)
+      const events = []
+      const stop = ctx.get('experimentPreview').subscribe(event => events.push(event))
+      let guards = 0
+      await assert.rejects(ctx.get('experimentPreview').prepare({ id: experiment.id, revision: 1, sessionId: 'session', analysis, assertCurrent() { if (++guards === 2) throw new Error('voice superseded during old-preview cleanup') } }), /voice superseded/)
+      assert.equal(guards, 2)
+      assert.deepEqual(events, [])
+      assert.notEqual((await route.fetch(request('view'))).status, 200)
+      await ctx.get('experimentPreview').prepare({ id: experiment.id, revision: 1, sessionId: 'session', analysis, assertCurrent() {} })
+      assert.equal(events.length, 1)
+      assert.equal(events[0].fromAnalysis, true)
+      stop()
       store.update({ id: experiment.id, expectedRevision: experiment.revision, snapshot: { protocol: 'changed protocol', sessionId: 'session' } })
       assert.equal((await route.fetch(request('view'))).status, 409)
       await assert.rejects(buildPreview(input), { code: 'STALE_TASK' })

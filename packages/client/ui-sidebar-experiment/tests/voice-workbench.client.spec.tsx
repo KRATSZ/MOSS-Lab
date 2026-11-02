@@ -155,3 +155,48 @@ it('retries a cold catalog and cancels retry work when the overlay leaves', asyn
   await new Promise(resolve => setTimeout(resolve, 300))
   expect(pending).toHaveBeenCalledTimes(1)
 })
+
+it('leaves selection alone for amendments and follows only a focus event', async () => {
+  const store = createVoiceNavigationStore().create()
+  const navigate = vi.fn(async () => {})
+  let sequence = 1, focusSequence = 10
+  const props = { useResource: () => ({ status: 'live', value: { sequence, focusSequence, status: 'running', sessionId: 's' } }),
+    useStore: (select: (state: ReturnType<typeof store.getSnapshot>) => unknown) => select(store.getSnapshot()),
+    actions: store.actions, navigate, t: (key: string) => key } as Parameters<typeof VoiceWorkbench>[0]
+  const view = render(<VoiceWorkbench {...props} />)
+  await waitFor(() => { expect(navigate).toHaveBeenCalledTimes(1) })
+  sequence++
+  view.rerender(<VoiceWorkbench {...props} />)
+  expect(navigate).toHaveBeenCalledTimes(1)
+  focusSequence++
+  view.rerender(<VoiceWorkbench {...props} />)
+  await waitFor(() => { expect(navigate).toHaveBeenCalledTimes(2) })
+  view.unmount()
+})
+
+it('shows a checked current preview as soon as its phase is ready and rejects stale versions', () => {
+  let revision = 2
+  const props = { sessionId: 's', useTabInfo: () => ({ tab: { id: 'tab' } }), t: (key: keyof typeof zh) => zh[key],
+    useResource: (address: string) => ({ status: 'live', value: address.includes('voiceworkbench')
+      ? { sequence: 4, sessionId: 's', status: 'running', phase: 'preview_ready', preview: { id: 'e', revision: 3 } }
+      : { status: 'ready', id: 'e', revision, document: 'current three-dimensional preview' } }) } as Parameters<typeof ExperimentBody>[0]
+  const view = render(<ExperimentBody {...props} />)
+  expect(view.container.querySelector('iframe')).toBeNull()
+  revision = 3
+  view.rerender(<ExperimentBody {...props} />)
+  expect(view.container.querySelector('iframe')?.getAttribute('srcdoc')).toContain('current three-dimensional preview')
+  expect(view.container.querySelector('[data-experiment-revision]')?.getAttribute('data-experiment-revision')).toBe('3')
+  view.unmount()
+})
+
+it('shows the missing condition instead of claiming to keep generating', () => {
+  const props = { sessionId: 's', useTabInfo: () => ({ tab: { id: 'tab' } }), t: (key: keyof typeof zh) => zh[key],
+    useResource: (address: string) => ({ status: 'live', value: address.includes('voiceworkbench')
+      ? { sequence: 2, sessionId: 's', status: 'completed', phase: 'needs_input', question: '每孔最终体积是多少？' }
+      : { status: 'waiting' } }) } as Parameters<typeof ExperimentBody>[0]
+  const view = render(<ExperimentBody {...props} />)
+  expect(screen.getByText('每孔最终体积是多少？')).toBeTruthy()
+  expect(screen.getByText(zh.voiceNeedsInput)).toBeTruthy()
+  expect(screen.queryByText(zh.voiceWorking)).toBeNull()
+  view.unmount()
+})

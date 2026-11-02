@@ -1,22 +1,27 @@
 import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 
-/** Continue one trusted endpoint conversation; only an explicit new experiment replaces it. */
-export function createDelegation({ controller, workspaces, events, timeoutMs = 300000, sessionId = null, bindingPath = null, workspacePath = null, agentPreset = 'standard', validateSession = async () => {} }) {
-  const jobs = new Map()
-  let closed = false
-  let activeSession = sessionId
-  let sequence = 0
-  let latestJob = null
+const active = job => job && ['running', 'timeout'].includes(job.status)
+
+/** Reject work based on voice requirements that were superseded or not admitted yet. */
+export class VoiceIntentError extends Error {
+  constructor(code) { super('最新语音要求已更新，请按最新要求继续；不要提交旧方案。'); this.code = code }
+}
+
+/** Own the endpoint conversation, latest accepted intent, and phase-driven navigation. */
+export function createDelegation({ controller, workspaces, events, timeoutMs = 300000, sessionId = null, bindingPath = null, workspacePath = null, agentPreset = 'standard', validateSession = async () => {}, cancelSession = async () => {}, removePendingVoice = async () => {} }) {
+  const jobs = new Map(), subscribers = new Set()
+  let closed = false, activeSession = sessionId, sequence = 0, latestJob = null
+  let focusSequence = 0, focusReason = null, presented = false
+  let admission = Promise.resolve()
   if (bindingPath && existsSync(bindingPath)) {
     const saved = JSON.parse(readFileSync(bindingPath, 'utf8'))
     if (typeof saved.sessionId !== 'string' || !saved.sessionId.trim() || !Number.isSafeInteger(saved.sequence) || saved.sequence < 0) throw new Error('语音会话记录无效，请检查本地记录')
-    activeSession = saved.sessionId
-    sequence = saved.sequence
+    activeSession = saved.sessionId; sequence = saved.sequence
   }
   const persist = (nextSession, nextSequence) => {
     if (!bindingPath || nextSession === null) return
-    const temporary = `${bindingPath}.${randomUUID()}.tmp`
+    const temporary = bindingPath + '.' + randomUUID() + '.tmp'
     try {
       writeFileSync(temporary, JSON.stringify({ sessionId: nextSession, sequence: nextSequence }), { mode: 0o600, flag: 'wx' })
       renameSync(temporary, bindingPath)
@@ -25,59 +30,56 @@ export function createDelegation({ controller, workspaces, events, timeoutMs = 3
       throw error
     }
   }
+  const changed = () => { for (const listener of subscribers) { try { listener() } catch { console.warn('xiaozhi task observer failed') } } }
+  const focus = reason => { focusSequence = Math.max(focusSequence + 1, Date.now()); focusReason = reason }
+  const publicJob = job => ({ jobId: job.jobId, sessionId: job.sessionId, status: job.status, result: job.result, cycleId: job.cycleId, phase: job.phase, question: job.question, preview: job.preview, supersededBy: job.supersededBy })
+  const latestForSession = id => [...jobs.values()].filter(job => job.sessionId === id).at(-1)
 
-  async function submit(message, { newExperiment = false } = {}) {
-    if (typeof newExperiment !== 'boolean') throw new Error('新实验标记必须为布尔值')
+  async function admit(message, newExperiment) {
     if (closed) throw new Error('委派服务已关闭')
-    if (typeof message !== 'string' || !message.trim() || Buffer.byteLength(message) > 8000) throw new Error('委派内容须为不超过 8000 字节的非空文字')
-    if ([...jobs.values()].some(job => job.status === 'running' || job.status === 'timeout')) throw new Error('已有小智任务正在执行，请稍后查询结果')
+    const previous = jobs.get(latestJob)
+    const replacing = active(previous)
     if (jobs.size >= 100) jobs.delete(jobs.keys().next().value)
     const jobId = randomUUID()
-    const job = { jobId, status: 'running', sessionId: null, result: null }
+    const job = { jobId, status: 'running', sessionId: null, result: null, cycleId: replacing && !newExperiment ? previous.cycleId : jobId, phase: 'preparing', question: null, preview: null, supersededBy: null, claimed: false }
     jobs.set(jobId, job)
-    latestJob = jobId
     let stopClaim, stopEvent, stopDiscard, timer
-    let promptStarted = false
-    let observing = true
-    let observationClosed = false
-    const cleanup = () => {
-      observing = false
-      clearTimeout(timer)
-      stopClaim?.(); stopEvent?.(); stopDiscard?.()
-    }
+    let promptStarted = false, observing = true, observationClosed = false
+    const cleanup = () => { observing = false; clearTimeout(timer); stopClaim?.(); stopEvent?.(); stopDiscard?.() }
     const finish = (status, result) => {
       if (!observing) return
-      job.status = status
-      job.result = result
-      cleanup()
+      job.status = status; job.result = result
+      if (status === 'error') job.phase = 'error'
+      if (status === 'completed' && job.phase === 'preparing') job.phase = 'reply'
+      cleanup(); changed()
     }
-    job.cancelObservation = () => {
-      if (!observing) return
-      observationClosed = true
-      job.status = 'error'
-      job.result = '委派服务已关闭，无法继续跟踪；任务可能仍在网页中运行'
-      cleanup()
-    }
+    job.finish = finish
+    job.cancelObservation = () => { observationClosed = true; finish('error', '委派服务已关闭，无法继续跟踪；任务可能仍在网页中运行') }
     const checkOpen = () => { if (closed) throw new Error('委派服务已关闭') }
     try {
       if (activeSession === null || newExperiment) {
         const workspace = workspaces.list()[0]
         if (!workspace && !workspacePath) throw new Error('网页中尚无工作区，请先创建工作区')
         const created = await controller.create(workspace ? { workspaceId: workspace.id, agentPreset } : { cwd: workspacePath, agentPreset })
-        job.sessionId = created.sessionId
+        job.sessionId = created.sessionId; checkOpen()
+        await controller.rename({ sessionId: job.sessionId, title: '小智实验 ' + new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) })
         checkOpen()
-        await controller.rename({ sessionId: job.sessionId, title: `小智实验 ${new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}` })
+      } else { await validateSession(activeSession, agentPreset); checkOpen(); job.sessionId = activeSession }
+      const nextSequence = Math.max(sequence + 1, Date.now())
+      persist(job.sessionId, nextSequence)
+      activeSession = job.sessionId; sequence = nextSequence; latestJob = jobId
+      if (replacing) {
+        await removePendingVoice(previous.sessionId, previous.requestId)
         checkOpen()
-      } else {
-        await validateSession(activeSession, agentPreset)
-        checkOpen()
-        job.sessionId = activeSession
+        previous.supersededBy = jobId
+        previous.finish('superseded', '已按最新要求继续，旧任务不再作为当前结果。')
+        if (newExperiment && previous.sessionId !== job.sessionId) await cancelSession(previous.sessionId)
       }
       const requestId = randomUUID()
-      let turn
-      let finalText = ''
+      job.requestId = requestId
+      let turn, finalText = ''
       stopClaim = events.on('agent/inbox/claimed', ({ agent, message: claimed, turn: claimedTurn }) => {
-        if (agent.id === job.sessionId && claimed.source?.rpcId === requestId) turn = claimedTurn
+        if (agent.id === job.sessionId && claimed.source?.rpcId === requestId) { turn = claimedTurn; job.claimed = true; changed() }
       }, { global: true })
       stopDiscard = events.on('agent/inbox/discarded', ({ agent, message: discarded }) => {
         if (agent.id === job.sessionId && discarded.source?.rpcId === requestId) finish('error', '任务在执行前被取消')
@@ -90,51 +92,61 @@ export function createDelegation({ controller, workspaces, events, timeoutMs = 3
         }
         if (event.type === 'turn/end') {
           if (event.data.reason?.kind === 'completed' && finalText.trim()) finish('completed', finalText)
-          else finish('error', `任务未正常完成：${event.data.reason?.kind ?? '未知原因'}；请查看网页会话`)
+          else finish('error', '任务未正常完成：' + (event.data.reason?.kind ?? '未知原因') + '；请查看网页会话')
         }
       }, { global: true })
-      timer = setTimeout(() => {
-        if (!observing) return
-        job.status = 'timeout'
-        job.result = job.result ? `${job.result}；等待结果已超时，仍在跟踪` : '等待结果超时，任务仍被跟踪，请稍后查询或查看网页会话'
-      }, timeoutMs)
-      const nextSequence = Math.max(sequence + 1, Date.now())
-      persist(job.sessionId, nextSequence)
-      activeSession = job.sessionId
-      sequence = nextSequence
+      timer = setTimeout(() => { if (observing) { job.status = 'timeout'; job.result = '等待结果超时，仍在跟踪，请查看网页会话'; changed() } }, timeoutMs)
+      if (!presented) { presented = true; focus('first_open') }
+      changed()
       promptStarted = true
-      await controller.prompt({ sessionId: job.sessionId, requestId, mode: 'queue', content: [{ type: 'text', text: `来自小智的委派：\n${message}` }] }, new AbortController().signal)
-      return { jobId, sessionId: job.sessionId, status: job.status, note: observationClosed ? '委派服务已关闭，无法继续跟踪；任务可能仍在网页中运行。' : '任务已发送到本地网页工作区，请查询结果。' }
+      const latestNote = replacing && !newExperiment ? '\n这是最新补充；以此覆盖此前相冲突的要求。沿用同一实验ID，读取当前版本后按最新要求更新并重新分析。' : ''
+      await controller.prompt({ sessionId: job.sessionId, requestId, mode: replacing && !newExperiment ? 'steer' : 'queue', content: [{ type: 'text', text: '来自小智的委派：\n' + message + latestNote }] }, new AbortController().signal)
+      return { jobId, sessionId: job.sessionId, status: job.status, note: observationClosed ? '服务已停止观察，任务可能仍在网页中运行。' : '任务已接受，等待期间可以直接补充或修改要求。' }
     } catch (error) {
       if (promptStarted) {
-        if (observing && (job.status === 'running' || job.status === 'timeout')) {
-          job.result = `提交结果未知：${error.message}；任务可能仍在网页中运行，请查看会话`
-        }
-        const note = observationClosed ? '委派服务已关闭，无法继续跟踪；任务可能仍在网页中运行。'
-          : observing ? '提交结果未知，请查询任务状态并查看网页会话。'
-            : '任务已有结果，请查询任务状态。'
-        return { jobId, sessionId: job.sessionId, status: job.status, note }
+        if (observing && active(job)) job.result = '提交结果未知：' + error.message + '；任务可能仍在网页中运行，请查看会话'
+        return { jobId, sessionId: job.sessionId, status: job.status, note: observationClosed ? '委派服务已关闭，无法继续跟踪；任务可能仍在网页中运行。' : observing ? '提交结果未知，请查询任务状态并查看网页会话。' : '任务已有结果，请查询任务状态。' }
       }
-      finish('error', `委派失败：${error.message}`)
+      finish('error', '委派失败：' + error.message)
+      if (latestJob !== jobId) jobs.delete(jobId)
       throw error
     }
   }
 
   return {
-    submit,
+    submit(message, { newExperiment = false } = {}) {
+      if (typeof newExperiment !== 'boolean') return Promise.reject(new Error('新实验标记必须为布尔值'))
+      if (typeof message !== 'string' || !message.trim() || Buffer.byteLength(message) > 8000) return Promise.reject(new Error('委派内容须为不超过 8000 字节的非空文字'))
+      const operation = admission.then(() => admit(message, newExperiment))
+      admission = operation.then(() => {}, () => {})
+      return operation
+    },
+    subscribe(listener) { subscribers.add(listener); return () => subscribers.delete(listener) },
     activeSessionId() { return activeSession },
     workbench() {
       const job = jobs.get(latestJob)
-      return { sequence, sessionId: activeSession, jobId: job?.jobId ?? null, status: job?.status ?? 'idle', result: job?.result ?? null }
+      return { sequence, focusSequence, focusReason, sessionId: activeSession, jobId: job?.jobId ?? null, status: job?.status ?? 'idle', result: job?.result ?? null, phase: job?.phase ?? 'idle', question: job?.question ?? null, preview: job?.preview ?? null }
     },
-    get(jobId) {
-      const job = jobs.get(jobId)
-      if (!job) throw new Error('任务不存在或服务已重启')
-      return { jobId: job.jobId, sessionId: job.sessionId, status: job.status, result: job.result }
+    get(jobId) { const job = jobs.get(jobId); if (!job) throw new Error('任务不存在或服务已重启'); return publicJob(job) },
+    needsInput(id, question) {
+      const job = jobs.get(latestJob)
+      if (!active(job) || !job.claimed || job.sessionId !== id) return false
+      if (job.phase === 'needs_input' && job.question === question) return true
+      job.phase = 'needs_input'; job.question = question; focus('needs_input'); changed(); return true
     },
-    close() {
-      closed = true
-      for (const job of jobs.values()) if (job.status === 'running' || job.status === 'timeout') job.cancelObservation?.()
+    previewReady({ sessionId: id, id: experimentId, revision }) {
+      const job = jobs.get(latestJob)
+      if (!active(job) || !job.claimed || job.sessionId !== id) return false
+      if (job.preview?.id === experimentId && job.preview.revision === revision) return true
+      job.phase = 'preview_ready'; job.preview = { id: experimentId, revision }; focus('preview_ready'); changed(); return true
     },
+    captureIntent(id) {
+      const job = latestForSession(id)
+      if (!job || !active(job) && !['superseded', 'error'].includes(job.status)) return () => {}
+      if (job.status === 'superseded') throw new VoiceIntentError('VOICE_SUPERSEDED')
+      if (!job.claimed) throw new VoiceIntentError('VOICE_INTENT_PENDING')
+      return () => { if (closed || latestForSession(id)?.jobId !== job.jobId || job.status === 'superseded') throw new VoiceIntentError('VOICE_SUPERSEDED') }
+    },
+    close() { closed = true; for (const job of jobs.values()) if (active(job)) job.cancelObservation?.(); subscribers.clear() },
   }
 }

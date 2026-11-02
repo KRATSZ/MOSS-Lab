@@ -74,7 +74,9 @@ test('text fallback shares the voice session and rejects other origins, oversize
     const state=await (await route(new Request('http://localhost/api/xiaozhi-workbench'))).json()
     assert.equal(state.sessionId,body.sessionId)
     assert.equal(state.status,'running')
-    assert.equal((await route(request({message:'busy'}))).status,409)
+    const amended = await route(request({message:'最新修改'}))
+    assert.equal(amended.status,200)
+    assert.equal((await amended.json()).sessionId,body.sessionId)
   } finally {f.delegation.close()}
 })
 

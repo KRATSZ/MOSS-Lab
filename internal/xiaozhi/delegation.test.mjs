@@ -23,7 +23,6 @@ test('delegate appears in a workspace session and returns only its own completed
     const accepted = await f.delegation.submit('分析我的实验')
     assert.equal(accepted.sessionId, 'session-1')
     assert.match(f.request.content[0].text, /来自小智的委派：\n分析我的实验/)
-    await assert.rejects(f.delegation.submit('second'), /正在执行/)
     const claim = f.listeners.get('agent/inbox/claimed')
     const event = f.listeners.get('session/event')
     claim({ agent: { id: 'other' }, message: { source: { rpcId: f.request.requestId } }, turn: 3 })
@@ -51,7 +50,7 @@ function claimAndEnd(f, request, reason = 'completed') {
   event({ id: 'session-1' }, { type: 'turn/end', data: { turn: 2, reason: { kind: reason } } })
 }
 
-test('timeout retains observation and concurrency until the matching turn completes', async t => {
+test('timeout retains observation until the matching turn completes', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const f = fixture({ timeoutMs: 50 })
   try {
@@ -59,9 +58,9 @@ test('timeout retains observation and concurrency until the matching turn comple
     t.mock.timers.tick(50)
     assert.equal(f.delegation.get(accepted.jobId).status, 'timeout')
     assert.equal(f.listeners.size, 3)
-    await assert.rejects(f.delegation.submit('second'), /正在执行/)
     claimAndEnd(f, f.request)
-    assert.deepEqual(f.delegation.get(accepted.jobId), { jobId: accepted.jobId, sessionId: accepted.sessionId, status: 'completed', result: '完成' })
+    assert.equal(f.delegation.get(accepted.jobId).status, 'completed')
+    assert.equal(f.delegation.get(accepted.jobId).result, '完成')
     assert.equal(f.listeners.size, 0)
     assert.equal((await f.delegation.submit('second')).status, 'running')
   } finally { f.delegation.close() }
@@ -134,7 +133,6 @@ test('an ambiguous prompt error keeps the job active and observable', async t =>
     const accepted = await f.delegation.submit('task')
     assert.equal(accepted.status, 'running')
     assert.match(f.delegation.get(accepted.jobId).result, /提交结果未知/)
-    await assert.rejects(f.delegation.submit('second'), /正在执行/)
     t.mock.timers.tick(50)
     assert.equal(f.delegation.get(accepted.jobId).status, 'timeout')
     claimAndEnd(f, request)

@@ -34,6 +34,20 @@ export function apply(ctx) {
     text: 'For an Opentrons protocol or 3D animation request, use create_experiment or update_experiment with complete Python source, then analyze_experiment on the returned current revision. Use only the configured project uv virtual environment for Python work: use the Python at $MOSS_PYTHON, or uv run --active --no-project for commands; use uv pip with --python "$MOSS_PYTHON" when managing dependencies. Do not use another interpreter or create another environment. The Opentrons analysis tool already uses this environment. Use the existing Flex3D preview, not a separate player. Report only results supported by tool output: preview_ready means local Opentrons analysis and preview generation succeeded, not complete validation, device readiness, experimental safety, or that a user saw the animation. Distinguish user-confirmed choices from assumptions and predictions; simulation does not observe physical results. A protocol comment or relative delay does not schedule an absolute time or record an observation. Report only steps actually present in the protocol, including any human confirmation or pause. State unconfirmed equipment, labware, deck positions, volumes, and other assumptions as assumptions. For repeated transfers, state the tip reuse policy and any cross-contamination risk; source volume must cover all transfers plus any applicable dead volume. Ask for essential missing details, or label assumptions for a requested example. If analysis or preview fails, explain it without claiming success. If a preview is unavailable after restart, analyze the current revision again. Never initiate a real robot run.',
   }), 'experiment-agent-tools.guidance')
   ctx.tools.register(defineTool({
+    name: 'request_experiment_input',
+    description: 'Ask the operator for essential missing experimental conditions before writing or revising a protocol. Submit one concise question, then wait for their reply. Do not guess critical volumes, concentrations or equipment.',
+    parameters: { question: { type: 'string', required: true, description: 'Concise question in the user language, at most 2000 UTF-8 bytes.' } },
+    output,
+    async execute(args, exec) {
+      if (!args.question.trim() || Buffer.byteLength(args.question) > 2000) throw new Error('A concise nonempty question is required.')
+      const current = sessionId(exec)
+      const intent = ctx.get('mossVoiceIntent')
+      intent?.captureIntent(current)()
+      intent?.needsInput(current, args.question)
+      return { status: 'needs_input', question: args.question }
+    },
+  }))
+  ctx.tools.register(defineTool({
     name: 'create_experiment',
     description: 'Create an Opentrons Flex experiment from a complete Python protocol for local simulation. After saving, call analyze_experiment to generate its animation. Ask for essential missing experimental details, or clearly state assumptions for a requested example. Do not initiate a robot run. Reuse the creation key on retry.',
     parameters: {

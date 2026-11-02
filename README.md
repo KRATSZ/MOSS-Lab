@@ -92,6 +92,9 @@ The runtime reads its configuration from the root `.env` file:
 | `AI_API_URL` | Required | Target HTTPS chat completion endpoint URL | `https://api.deepseek.com/v1/chat/completions` |
 | `AI_MODEL` | Required | Model designation identifier to invoke | `deepseek-chat` |
 | `XIAOZHI_WSS_URL` | Optional | Private WebSocket URL for Xiaozhi MCP communication | `wss://api.example.com/mcp?token=xxx` |
+| `MOSS_AUTO_WAKE` | Optional | Focus on first opening, clarification or current preview completion; macOS default is `1`, `0` disables it | `1` |
+| `MOSS_BROWSER_APP` | Optional | macOS browser for workbench reuse; Google Chrome, Microsoft Edge or Safari | `Google Chrome` |
+| `MOSS_COMPLETION_MODE` | Optional | `watch` observes completion in the active voice dialog; `sampling` enables an experimental server notification attempt | `watch` |
 | `OPENTRONS_URL` | Optional | Address of the target Opentrons robot server | `http://192.168.1.100:31950` |
 
 ## Project Layout

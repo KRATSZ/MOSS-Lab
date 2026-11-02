@@ -5,7 +5,7 @@ import { generateTransfer } from './transfer-template.mjs'
 const MAX_PROTOCOL = 256 * 1024
 
 /** Session-scoped experiment operations; analyzer and preview are trusted internal services. */
-export function createWorkflow({ store, analyzer, preview }) {
+export function createWorkflow({ store, analyzer, preview, captureIntent = () => () => {} }) {
   const running = new Set()
   const pending = new Set()
   let closing = false
@@ -16,6 +16,7 @@ export function createWorkflow({ store, analyzer, preview }) {
   return {
     create({ sessionId, creationKey, requirement, parameters, protocol }) {
       requireOpen()
+      captureIntent(sessionId)()
       if (typeof requirement !== 'string' || !requirement.trim() || !parameters || typeof parameters !== 'object' || Array.isArray(parameters)) throw new ExperimentError('INVALID_INPUT', 'requirement and parameters are required')
       protocol = protocol === undefined ? generateTransfer(parameters) : protocol
       validateProtocol(protocol)
@@ -34,6 +35,7 @@ export function createWorkflow({ store, analyzer, preview }) {
     },
     update({ sessionId, id, expectedRevision, requirement, parameters, protocol }) {
       requireOpen()
+      captureIntent(sessionId)()
       if (typeof requirement !== 'string' || !requirement.trim() || !parameters || typeof parameters !== 'object' || Array.isArray(parameters)) throw new ExperimentError('INVALID_INPUT', 'requirement and parameters are required')
       protocol = protocol === undefined ? generateTransfer(parameters) : protocol
       validateProtocol(protocol)
@@ -43,6 +45,8 @@ export function createWorkflow({ store, analyzer, preview }) {
     },
     async analyze({ sessionId, id, revision }) {
       requireOpen()
+      const assertCurrent = captureIntent(sessionId)
+      assertCurrent()
       if (running.has(id)) throw new ExperimentError('CHECK_IN_PROGRESS', 'analysis already in progress')
       const experiment = store.getForSession(sessionId, id)
       if (experiment.revision !== revision) throw new ExperimentError('REVISION_CONFLICT', 'experiment revision changed', { currentRevision: experiment.revision })
@@ -54,6 +58,7 @@ export function createWorkflow({ store, analyzer, preview }) {
         let analysis
         try {
           analysis = await analyzer.analyze(experiment.snapshot.protocol)
+          assertCurrent()
           if (!Buffer.isBuffer(analysis) || !analysis.length) throw new ExperimentError('ANALYSIS_FAILED', 'analysis returned no data')
           store.finishCheck({ ...task, status: 'passed', result: { analysisSha256: createHash('sha256').update(analysis).digest('hex'), analysisBase64: analysis.toString('base64') } })
         } catch (error) {
@@ -64,7 +69,7 @@ export function createWorkflow({ store, analyzer, preview }) {
           throw error
         }
         if (closing) throw new ExperimentError('WORKFLOW_CLOSED', 'experiment workflow is closing')
-        await preview.prepare({ id, revision, sessionId, analysis })
+        await preview.prepare({ id, revision, sessionId, analysis, assertCurrent })
         return { id, revision, status: 'preview_ready', note: 'Local simulation only; device readiness and experimental safety were not checked.' }
       })()
       pending.add(operation)

@@ -28,7 +28,7 @@ The client watches the current session's same-origin preview status every one se
 <a id="model-experience"></a>
 ## Voice workbench
 
-A new message accepted by the local Xiaozhi bridge selects its existing conversation and opens the experiment panel before a preview is available. Repeated status polls do not change the selection. During a voice revision the previous animation is hidden; the current checked preview replaces it with its revision number when processing ends. The authenticated bridge endpoint must be mounted by the local MOSS launch configuration.
+The local Xiaozhi bridge selects the conversation and opens the experiment panel on first opening, essential-condition questions and current-preview completion. Ordinary amendments and repeated polls preserve the user’s selection. During amendments the old animation is hidden; only the exact current checked preview is displayed, even if the Agent reply is still running. Missing conditions appear directly in the panel. The authenticated bridge endpoint must be mounted by the local MOSS launch configuration.
 
 ## Model Experience
 

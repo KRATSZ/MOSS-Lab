@@ -63,3 +63,25 @@ test('publishes only a current analyzed revision and rejects another session', a
   await assert.rejects(late, { code: 'STALE_TASK' })
   assert.equal(published.length, 1)
 })
+
+test('a voice amendment blocks an older analysis before it can pass or publish a preview', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'workflow-voice-intent-'))
+  const store = new ExperimentStore({ path: join(dir, 'store.sqlite'), create: true })
+  let generation = 1, complete, published = 0
+  const workflow = createWorkflow({ store,
+    captureIntent: () => {
+      const captured = generation
+      return () => { if (captured !== generation) { const error = new Error('latest voice requirement changed'); error.code = 'VOICE_SUPERSEDED'; throw error } }
+    },
+    analyzer: { analyze: () => new Promise(resolve => { complete = resolve }) },
+    preview: { prepare: async () => { published++ } },
+  })
+  t.after(async () => { await workflow.close(); store.close(); rmSync(dir, { recursive: true, force: true }) })
+  const { experiment } = workflow.create({ sessionId: 's', creationKey: 'voice', requirement: 'three repeats', parameters: { source: 'A1', destinations: ['B1'], volumeUl: 50 } })
+  const pending = workflow.analyze({ sessionId: 's', id: experiment.id, revision: 1 })
+  generation++
+  complete(Buffer.from('{"commands":[]}'))
+  await assert.rejects(pending, { code: 'VOICE_SUPERSEDED' })
+  assert.equal(published, 0)
+  assert.equal(store.getChecks(experiment.id, 1).some(check => check.status === 'passed'), false)
+})

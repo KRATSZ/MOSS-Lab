@@ -25,7 +25,7 @@ export function VoiceWorkbench({ useResource, useStore, actions, navigate, t }: 
   const sequence = useStore(state => state.sequence)
   const value = resource.value
   const target = value?.status === 'idle' ? null : value?.sessionId
-  const accepted = value?.sequence
+  const accepted = value?.focusSequence ?? value?.sequence
   const [failed, setFailed] = useState(false)
   const [retry, setRetry] = useState(0)
   useEffect(() => {

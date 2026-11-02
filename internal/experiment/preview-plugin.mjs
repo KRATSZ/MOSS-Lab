@@ -48,14 +48,17 @@ export function apply(ctx, config) {
   const preparing = new Set()
   const recovering = new Set()
   const attempted = new Set()
+  const listeners = new Set()
   let closing = false
   const service = {
+    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) },
     async prepare(input) {
       if (closing) throw new Error('experiment preview is closing')
       if (preparing.has(input.id)) throw new Error('experiment preview is already being prepared')
       preparing.add(input.id)
       const operation = (async () => {
         const preview = await buildPreview({ ...input, store: ctx.experimentStore, flexRoot: config.flexRoot, python: config.python, temporaryRoot: config.temporaryRoot, timeoutMs: config.timeoutMs })
+        try { input.assertCurrent?.() } catch (error) { await rm(preview.directory, { recursive: true, force: true }); throw error }
         if (closing) {
           await rm(preview.directory, { recursive: true, force: true })
           throw new Error('experiment preview is closing')
@@ -74,8 +77,13 @@ export function apply(ctx, config) {
           await rm(preview.directory, { recursive: true, force: true })
           throw new Error('experiment changed before preview publication')
         }
+        try { input.assertCurrent?.() } catch (error) { await rm(preview.directory, { recursive: true, force: true }); throw error }
         resources.publish(preview)
         resources.select(preview.id)
+        for (const listener of listeners) {
+          try { listener({ sessionId: input.sessionId, id: preview.id, revision: preview.revision, fromAnalysis: typeof input.assertCurrent === 'function' }) }
+          catch { console.warn('experiment preview observer failed') }
+        }
         return { id: preview.id, revision: preview.revision }
       })()
       pending.add(operation)
@@ -91,6 +99,7 @@ export function apply(ctx, config) {
     ctx.provide('experimentPreview', service)
     return async () => {
       closing = true
+      listeners.clear()
       await Promise.allSettled([...pending])
       await Promise.all([...resources.previews.values()].map(preview => rm(preview.directory, { recursive: true, force: true })))
     }

@@ -40,6 +40,21 @@
         agentPreset: moss-experiment
         bindingPath: !!js "process.env.DSH_HOME + '/xiaozhi-session.json'"
         workspacePath: !!js process.cwd()
+        diagnosticsPath: !!js "process.env.DSH_HOME + '/xiaozhi-events.jsonl'"
+        feedback:
+          offsetsMs: [0, 15000, 45000]
+          pollWaitMs: 4000
+          completionMode: !!js "process.env.MOSS_COMPLETION_MODE || 'watch'"
+        transport:
+          reconnectMinMs: 1000
+          reconnectMaxMs: 30000
+          connectTimeoutMs: 10000
+          heartbeatMs: 20000
+          samplingTimeoutMs: 15000
+        wakeup:
+          enabled: !!js "process.env.MOSS_AUTO_WAKE === undefined ? process.platform === 'darwin' : process.env.MOSS_AUTO_WAKE === '1'"
+          browserApp: !!js "process.env.MOSS_BROWSER_APP || 'Google Chrome'"
+          timeoutMs: 10000
 - insert:
     - id: preset-moss-experiment
       name: '@deepseek-ai/dsh-agent-preset'
@@ -54,6 +69,11 @@
             config:
               prefix: >-
                 You are the laboratory experiment assistant. Respond briefly in the user's language.
+                You run inside the MOSS computer workbench. A message prefixed 来自小智的委派 has already arrived here from the voice device.
+                When asked whether MOSS can communicate with the computer, acknowledge receipt and explain that experiment protocol authoring and preview happen here; do not mistake this for a request to contact a second computer.
+                For a simple echo or connectivity test, respond with the requested text without tools.
+                While preparing, accept amendments immediately. The latest user requirement overrides earlier conflicting requirements; retain other confirmed conditions and the same experiment ID.
+                When essential conditions require a user response, call request_experiment_input with one concise bundled question, then wait. Do not call it for optional preferences or a simple connectivity test.
                 Use the provided create_experiment, get_experiment, update_experiment and analyze_experiment tools for local protocol previews.
                 Do not inspect or modify application code or run shell commands.
                 When essential conditions are missing, ask at most three concise grouped questions covering only facts that change this experiment; the next message continues this conversation.

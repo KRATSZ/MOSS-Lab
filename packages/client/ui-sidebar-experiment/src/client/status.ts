@@ -156,6 +156,10 @@ export type VoiceWorkbenchStatus = {
   readonly jobId: string | null
   readonly status: 'idle' | 'running' | 'completed' | 'error' | 'timeout'
   readonly result: string | null
+  readonly focusSequence?: number
+  readonly phase?: string
+  readonly question?: string | null
+  readonly preview?: { readonly id: string; readonly revision: number } | null
 }
 
 /** Observe the voice task without creating a second conversation or model turn. */
@@ -189,6 +193,10 @@ function isVoiceWorkbenchStatus(value: unknown): value is VoiceWorkbenchStatus {
     && 'sessionId' in value && (value.sessionId === null || (typeof value.sessionId === 'string' && value.sessionId.length > 0))
     && 'jobId' in value && (value.jobId === null || typeof value.jobId === 'string')
     && 'result' in value && (value.result === null || typeof value.result === 'string')
+    && (!('focusSequence' in value) || Number.isSafeInteger(value.focusSequence) && Number(value.focusSequence) >= 0)
+    && (!('phase' in value) || typeof value.phase === 'string')
+    && (!('question' in value) || value.question === null || typeof value.question === 'string')
+    && (!('preview' in value) || value.preview === null || typeof value.preview === 'object' && 'id' in value.preview && typeof value.preview.id === 'string' && 'revision' in value.preview && Number.isSafeInteger(value.preview.revision) && Number(value.preview.revision) > 0)
 }
 
 function isActive(signal: AbortSignal): boolean { return !signal.aborted }
