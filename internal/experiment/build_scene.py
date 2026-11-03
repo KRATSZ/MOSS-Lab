@@ -13,7 +13,17 @@ def main():
 
     model = Model("preview", analysis_path, output_path)
     try:
-        (output_path / "info.json").write_text(json.dumps(model.info(), ensure_ascii=False), encoding="utf-8")
+        info = model.info()
+        sys.path.insert(0, str(flex_root.parent / "figures"))
+        try:
+            from experiment_figure import generate
+
+            figure = generate(analysis_path, output_path / "figures")
+            info["setup_figure"] = {"ok": True, "folder": Path(figure["directory"]).name, "files": figure["files"]}
+        except Exception:
+            # The completed scene remains usable when its companion image fails.
+            info["setup_figure"] = {"ok": False}
+        (output_path / "info.json").write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
     finally:
         model.close()
 

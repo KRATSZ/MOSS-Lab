@@ -8,15 +8,26 @@ export interface PreviewBundle {
   readonly analysis: Uint8Array
   readonly view: Uint8Array
   readonly assets: Readonly<Record<string, Uint8Array>>
+  /** Null when a companion image is unavailable; animation resources remain usable. */
+  readonly setup: { readonly html: string; readonly files: Readonly<Record<string, Uint8Array>> } | null
 }
 
 const MAX_FILE = 32 * 1024 * 1024
 const MAX_TOTAL = 64 * 1024 * 1024
 const MAX_TEXTURES = 64
 
-type Resource = 'viewer' | 'script' | 'orbit' | 'three' | 'info' | 'analysis' | 'view' | 'asset'
+type Resource = 'viewer' | 'script' | 'orbit' | 'three' | 'info' | 'analysis' | 'view' | 'asset' | 'setup' | 'setup-file'
 
-/** Fetch all resources without allowing unbounded responses or mixed revisions. */
+/**
+ * Fetch checked resources within shared byte limits; a failed image remains unavailable without discarding animation.
+ * @param session Owning session identifier.
+ * @param id Experiment identifier.
+ * @param revision Checked revision.
+ * @param task Successful analysis task.
+ * @param signal Cancellation for all resource reads.
+ * @param endpoint Authenticated preview path; defaults to the experiment endpoint.
+ * @returns Resources from one task, with null setup when its image cannot be loaded.
+ */
 export async function fetchPreviewBundle(session: string, id: string, revision: number, task: string, signal: AbortSignal, endpoint: '/api/experiment-preview' | '/api/experiment-demo' = '/api/experiment-preview'): Promise<PreviewBundle> {
   let total = 0
   async function read(resource: Resource, file?: string): Promise<Uint8Array> {
@@ -65,6 +76,24 @@ export async function fetchPreviewBundle(session: string, id: string, revision: 
     }
     if (!(texture.file in assets)) assets[texture.file] = await read('asset', texture.file)
   }
+  let setup: PreviewBundle['setup'] = null
+  try {
+    const metadata: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(info))
+    if (typeof metadata === 'object' && metadata !== null && 'setup_figure' in metadata) {
+      const figure = metadata.setup_figure
+      if (typeof figure === 'object' && figure !== null && 'ok' in figure && figure.ok === true
+        && 'files' in figure && Array.isArray(figure.files) && figure.files.length <= MAX_TEXTURES
+        && figure.files.every((name: unknown) => typeof name === 'string' && /^(setup(?:-[1-9][0-9]*)?\.png|setup\.html|setup\.json|wells\.csv)$/.test(name))) {
+        const html = new TextDecoder('utf-8', { fatal: true }).decode(await read('setup'))
+        const files: Record<string, Uint8Array> = Object.create(null)
+        for (const name of figure.files) if (name !== 'setup.html') files[name] = await read('setup-file', name)
+        setup = { html, files }
+      }
+    }
+  } catch (error) {
+    if (signal.aborted) throw error
+    // Image loading owns no scene state; keep the already checked animation.
+  }
   const statusParams = new URLSearchParams(endpoint === '/api/experiment-demo' ? { resource: 'status' } : { resource: 'status', session })
   const response = await fetch(`${endpoint}?${statusParams}`, { signal, credentials: 'same-origin', cache: 'no-store' })
   if (!response.ok) throw new Error('Preview status unavailable')
@@ -74,5 +103,5 @@ export async function fetchPreviewBundle(session: string, id: string, revision: 
     || !('task' in status) || status.task !== task) {
     throw new Error('Experiment changed during preview load')
   }
-  return { viewer, script, orbit, three, info, analysis, view, assets }
+  return { viewer, script, orbit, three, info, analysis, view, assets, setup }
 }

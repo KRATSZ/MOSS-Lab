@@ -13,6 +13,34 @@ import type { UseResource } from '@deepseek-ai/dsh-client-resources/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 
 describe('experiment animation entry', () => {
+  it('switches between animation and a downloads-only setup frame', () => {
+    const useResource = (() => ({ status: 'live', value: { status: 'ready', id: 'x', revision: 1, task: 't', document: '<p>animation</p>', setupDocument: '<p>setup</p>' }, failure: undefined })) as UseResource
+    const props = { sessionId: 'session', useTabInfo: () => ({ tab: { id: 'tab' } }), useResource } as PropsRuntime<'sidebar.right.pane.tab'>
+    const view = render(<ExperimentBody {...props} t={key => key in zh ? zh[key as keyof typeof zh] : key} />)
+    fireEvent.click(screen.getByRole('button', { name: zh.setupImage }))
+    const frame = view.container.querySelector('iframe')!
+    expect({ title: frame.title, sandbox: frame.getAttribute('sandbox'), content: frame.getAttribute('srcdoc') }).toMatchInlineSnapshot(`
+      {
+        "content": "<p>setup</p>",
+        "sandbox": "allow-downloads",
+        "title": "配置图",
+      }
+    `)
+    fireEvent.click(screen.getByRole('button', { name: zh.showAnimation }))
+    expect(view.container.querySelector('iframe')!.getAttribute('sandbox')).toBe('allow-scripts')
+    view.unmount()
+  })
+
+  it('reports an unavailable setup image and lets the user return to animation', () => {
+    const useResource = (() => ({ status: 'live', value: { status: 'ready', id: 'x', revision: 1, task: 't', document: '<p>animation</p>', setupDocument: null }, failure: undefined })) as UseResource
+    const props = { sessionId: 'session', useTabInfo: () => ({ tab: { id: 'tab' } }), useResource } as PropsRuntime<'sidebar.right.pane.tab'>
+    const view = render(<ExperimentBody {...props} t={key => key in zh ? zh[key as keyof typeof zh] : key} />)
+    fireEvent.click(screen.getByRole('button', { name: zh.setupImage }))
+    expect(screen.getByText(zh.setupUnavailable)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: zh.showAnimation }))
+    expect(view.container.querySelector('iframe')).not.toBeNull()
+    view.unmount()
+  })
   it('opens each ready preview once in its visible session', () => {
     const store = createAutoOpenStore().create()
     const openExperiment = vi.fn(() => true)
@@ -138,7 +166,7 @@ describe('experiment animation entry', () => {
       addresses.push(address)
       if (address.startsWith('dsh-resource://experimentwatch/')) return { status: 'live', value: { status: 'waiting' }, failure: undefined }
       return address.includes('mode=demo')
-        ? { status: 'live', value: { status: 'ready', id: 'demo', revision: 1, task: 'task', document: '<p>demo</p>' }, failure: undefined }
+        ? { status: 'live', value: { status: 'ready', id: 'demo', revision: 1, task: 'task', document: '<p>demo</p>', setupDocument: null }, failure: undefined }
         : { status: 'live', value: { status: 'waiting' }, failure: undefined }
     }) as UseResource
     const props = { sessionId: 'session', useTabInfo: () => ({ tab: { id: 'tab' } }), useResource } as PropsRuntime<'sidebar.right.pane.tab'>
@@ -161,7 +189,7 @@ describe('experiment animation entry', () => {
     const useResource = ((address: string) => {
       if (address.startsWith('dsh-resource://experimentwatch/')) return { status: 'live', value: task ? { status: 'ready', id: 'x', revision: 1, task } : { status: 'waiting' }, failure: undefined }
       return address.includes('mode=demo')
-        ? { status: 'live', value: { status: 'ready', id: 'demo', revision: 1, task: 'demo', document: '<p>demo</p>' }, failure: undefined }
+        ? { status: 'live', value: { status: 'ready', id: 'demo', revision: 1, task: 'demo', document: '<p>demo</p>', setupDocument: null }, failure: undefined }
         : { status: 'live', value: { status: 'waiting' }, failure: undefined }
     }) as UseResource
     const props = { sessionId: 'session', useTabInfo: () => ({ tab: { id: 'tab' } }), useResource } as PropsRuntime<'sidebar.right.pane.tab'>
@@ -178,7 +206,7 @@ describe('experiment animation entry', () => {
   })
 
   it('renders an opaque sandbox when resources are ready', () => {
-    const useResource = (() => ({ status: 'live', value: { status: 'ready', id: 'x', revision: 2, task: 't', document: '<p>viewer</p>' }, failure: undefined })) as UseResource
+    const useResource = (() => ({ status: 'live', value: { status: 'ready', id: 'x', revision: 2, task: 't', document: '<p>viewer</p>', setupDocument: null }, failure: undefined })) as UseResource
     const props = { sessionId: 'session', useTabInfo: () => ({ tab: { id: 'tab' } }), useResource } as PropsRuntime<'sidebar.right.pane.tab'>
     const view = render(<ExperimentBody {...props} t={key => key} />)
     const frame = view.container.querySelector('iframe')!

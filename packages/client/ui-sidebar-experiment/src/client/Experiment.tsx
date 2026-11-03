@@ -7,6 +7,7 @@ import css from './Experiment.module.css'
 /** Check the current experiment on each mount and explicit refresh. */
 export function ExperimentBody({ t, useResource, useTabInfo, sessionId }: PropsLocale<'sidebarExperiment'> & PropsRuntime<'sidebar.right.pane.tab'>): ReactNode {
   const [generation, setGeneration] = useState(0)
+  const [showSetup, setShowSetup] = useState(false)
   const [robotGeneration, setRobotGeneration] = useState(0)
   const [demoTask, setDemoTask] = useState<string | null | undefined>(undefined)
   const { tab } = useTabInfo()
@@ -29,6 +30,7 @@ export function ExperimentBody({ t, useResource, useTabInfo, sessionId }: PropsL
         <div>{t('demoUnavailable')}</div>
       </div>}
       <div className={css.toolbar}>
+        <Button size="sm" variant="outline" onClick={() => setShowSetup(value => !value)}>{t(showSetup ? 'showAnimation' : 'setupImage')}</Button>
         <Button size="sm" variant="outline" onClick={() => setDemoTask(demo ? undefined : task ?? null)}>{t(demo ? 'returnToExperiment' : 'viewDemo')}</Button>
         <Button size="sm" variant="outline" onClick={() => setGeneration(value => value + 1)}>{t('refresh')}</Button>
         <Button size="sm" variant="outline" onClick={() => setRobotGeneration(value => value + 1)}>{t('robotQuery')}</Button>
@@ -47,7 +49,11 @@ export function ExperimentBody({ t, useResource, useTabInfo, sessionId }: PropsL
             </>}
       </div>}
       {ready
-        ? <iframe className={css.frame} title={t('title')} sandbox="allow-scripts" srcDoc={ready.document} />
+        ? showSetup
+          ? ready.setupDocument === null
+            ? <div className={css.waiting} role="status">{t('setupUnavailable')}</div>
+            : <iframe key="setup" className={css.frame} title={t('setupImage')} sandbox="allow-downloads" srcDoc={ready.setupDocument} />
+          : <iframe key="animation" className={css.frame} title={t('title')} sandbox="allow-scripts" srcDoc={ready.document} />
         : <div className={css.waiting}><div role={failed ? 'alert' : 'status'}>{message}</div></div>}
     </div>
   )

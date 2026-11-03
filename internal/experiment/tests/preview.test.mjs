@@ -28,6 +28,10 @@ test('scene generation requires the latest matching analysis for the current rev
     const scene = JSON.parse(await readFile(join(preview.directory, 'view.json'), 'utf8'))
     assert.ok(scene.frames.length > 0)
     assert.ok(scene.geoms.length > 0)
+    const info = JSON.parse(await readFile(join(preview.directory, 'info.json'), 'utf8'))
+    assert.equal(info.setup_figure.ok, true)
+    const image = await readFile(join(preview.directory, 'figures', info.setup_figure.folder, 'setup.png'))
+    assert.equal(image.subarray(1, 4).toString(), 'PNG')
     const ctx = new Context()
     let route
     ctx.provide('experimentStore', store)
@@ -39,6 +43,7 @@ test('scene generation requires the latest matching analysis for the current rev
       const request = resource => new Request(`http://localhost/api/experiment-preview?resource=${resource}&id=${experiment.id}&revision=1&session=session&task=${task.taskId}`)
       assert.deepEqual(await (await route.fetch(request('status'))).json(), { status: 'ready', id: experiment.id, revision: 1, task: task.taskId })
       assert.ok((await (await route.fetch(request('view'))).json()).frames.length > 0)
+      assert.match(await (await route.fetch(request('setup'))).text(), /下载 PNG/)
       store.update({ id: experiment.id, expectedRevision: experiment.revision, snapshot: { protocol: 'changed protocol', sessionId: 'session' } })
       assert.equal((await route.fetch(request('view'))).status, 409)
       await assert.rejects(buildPreview(input), { code: 'STALE_TASK' })

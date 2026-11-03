@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { fetchFigure } from './figure-resources.mjs'
 
 const NO_STORE = { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' }
 const RESOURCE = '/api/experiment-preview'
@@ -61,6 +62,7 @@ export class PreviewResources {
       if (!preview || preview.revision !== revision || preview.sessionId !== sessionId) return failure(404)
       if (url.searchParams.get('task') !== preview.taskId || !this.isCurrent(preview)) return failure(409)
       const address = name => `${this.resourcePath}?${new URLSearchParams({ id, revision: String(revision), session: sessionId, task: preview.taskId, resource: name })}`
+      if (resource === 'setup' || resource === 'setup-file') return await fetchFigure({ directory: preview.directory, resource, file: url.searchParams.get('file'), address })
       let path
       let contentType
       if (resource === 'viewer') {

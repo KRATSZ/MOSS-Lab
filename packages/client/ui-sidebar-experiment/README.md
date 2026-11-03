@@ -23,6 +23,8 @@ The current session opens **Experiment animation** automatically when a checked 
 <a id="implementation"></a>
 ## Implementation
 
+**Setup image** switches to a scriptless frame containing declared starting setup and PNG/CSV/JSON downloads; **Animation** returns to playback. Downloads stay inside the checked bundle and its existing byte limits. Image failure shows a retry message while animation remains available. The image frame allows downloads only; the animation frame allows scripts only.
+
 The client watches the current session's same-origin preview status every five seconds, opens each new checked task once, and checks again when the user selects **Check again**. Demo mode uses `/api/experiment-demo` and the fixed session `demo`; real experiments use `/api/experiment-preview`. Both fetch bounded resources for the selected revision and task and render them in a sandboxed frame after rechecking the status. **Check robot status** makes one separate read-only request and displays the available device information and query time.
 
 <a id="model-experience"></a>

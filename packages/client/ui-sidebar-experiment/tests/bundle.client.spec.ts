@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fetchPreviewBundle } from '../src/client/bundle.ts'
-import { createPreviewDocument } from '../src/client/document.ts'
+import { createPreviewDocument, createSetupDocument } from '../src/client/document.ts'
 
 const session = 'session-one'
 const identity = { id: 'experiment', revision: 1, task: 'checked' }
@@ -15,6 +15,40 @@ const contents: Record<string, string> = {
 afterEach(() => vi.restoreAllMocks())
 
 describe('bounded checked preview resources', () => {
+  it('embeds checked setup downloads without granting scripts or network access', async () => {
+    const files = ['setup.html', 'setup.png', 'wells.csv', 'setup.json']
+    const image = (path('setup-file') + '&file=setup.png').replaceAll('&', '&amp;')
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = new URL(String(input), 'https://example.test')
+      const resource = url.searchParams.get('resource')!
+      if (resource === 'status') return Response.json({ status: 'ready', ...identity })
+      if (resource === 'info') return Response.json({ setup_figure: { ok: true, files } })
+      if (resource === 'setup') return new Response(`<img src="${image}"><a href="${image}" download>PNG</a>`)
+      return new Response(resource === 'setup-file' ? 'artifact' : contents[resource])
+    })
+    const bundle = await fetchPreviewBundle(session, identity.id, 1, identity.task, new AbortController().signal)
+    expect(bundle.setup).not.toBeNull()
+    const document = createSetupDocument(bundle, session, identity.id, 1, identity.task)
+    expect(document).toContain('data:image/png;base64,')
+    expect(document).toContain('download="setup.png"')
+    expect(document).toContain("default-src 'none'")
+    expect(document).not.toContain('/api/experiment-preview')
+    expect(document).not.toContain('<script>')
+  })
+
+  it('keeps animation resources when setup generation or download fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const resource = new URL(String(input), 'https://example.test').searchParams.get('resource')!
+      if (resource === 'status') return Response.json({ status: 'ready', ...identity })
+      if (resource === 'info') return Response.json({ setup_figure: { ok: true, files: ['setup.html', 'setup.png'] } })
+      if (resource === 'setup') return new Response(null, { status: 503 })
+      return new Response(contents[resource])
+    })
+    const bundle = await fetchPreviewBundle(session, identity.id, 1, identity.task, new AbortController().signal)
+    expect(bundle.setup).toBeNull()
+    expect(createSetupDocument(bundle, session, identity.id, 1, identity.task)).toBeNull()
+    expect(createPreviewDocument(bundle, session, identity.id, 1, identity.task)).toContain("script-src 'unsafe-inline' blob:")
+  })
   it('loads pinned resources and verifies the checked task again', async () => {
     const calls: URL[] = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
@@ -93,6 +127,6 @@ describe('bounded checked preview resources', () => {
 
   it('rejects missing script references before creating a document', () => {
     const bytes = encoder.encode('')
-    expect(() => createPreviewDocument({ viewer: bytes, script: bytes, orbit: bytes, three: bytes, info: bytes, analysis: bytes, view: bytes, assets: {} }, session, identity.id, 1, identity.task)).toThrow('Unsupported')
+    expect(() => createPreviewDocument({ viewer: bytes, script: bytes, orbit: bytes, three: bytes, info: bytes, analysis: bytes, view: bytes, assets: {}, setup: null }, session, identity.id, 1, identity.task)).toThrow('Unsupported')
   })
 })

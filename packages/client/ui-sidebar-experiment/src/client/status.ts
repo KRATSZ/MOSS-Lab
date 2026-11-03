@@ -1,10 +1,10 @@
 import type { ResourceProvider } from '@deepseek-ai/dsh-client-resources/client'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { fetchPreviewBundle } from './bundle.ts'
-import { createPreviewDocument } from './document.ts'
+import { createPreviewDocument, createSetupDocument } from './document.ts'
 
 /** Status returned by the experiment preview service. */
-export type ExperimentStatus = { readonly status: 'waiting' | 'checking' } | { readonly status: 'ready'; readonly id: string; readonly revision: number; readonly task: string; readonly document: string }
+export type ExperimentStatus = { readonly status: 'waiting' | 'checking' } | { readonly status: 'ready'; readonly id: string; readonly revision: number; readonly task: string; readonly document: string; readonly setupDocument: string | null }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface ResourceProtocolMap {
@@ -26,6 +26,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   }
 }
 
+/** Read-only device snapshot returned by the robot-status endpoint. */
 export type RobotStatus = {
   readonly status: 'not_configured' | 'unreachable' | 'partial' | 'ready'
   readonly queriedAt: string
@@ -129,9 +130,10 @@ export const statusProvider: ResourceProvider<'experimentstatus'> = {
           if (!signal.aborted) yield { ok: true, value: { status: 'checking' } }
           const bundle = await fetchPreviewBundle(session, status.id, status.revision, status.task, signal, endpoint)
           const document = createPreviewDocument(bundle, session, status.id, status.revision, status.task, endpoint)
+          const setupDocument = createSetupDocument(bundle, session, status.id, status.revision, status.task, endpoint)
           if (!signal.aborted) {
             previous = status
-            yield { ok: true, value: { ...status, document } }
+            yield { ok: true, value: { ...status, document, setupDocument } }
           }
         }
       } catch {

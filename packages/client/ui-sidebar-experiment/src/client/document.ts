@@ -17,7 +17,41 @@ function replaceRequired(source: string, target: string, replacement: string): s
   return source.replaceAll(target, replacement)
 }
 
-/** Create a self-contained opaque-origin preview document from checked resources. */
+/**
+ * Create a scriptless setup document with embedded downloads, or null when images are unavailable.
+ * @param bundle Checked setup HTML and artifact bytes.
+ * @param session Owning session identifier.
+ * @param id Experiment identifier.
+ * @param revision Checked revision.
+ * @param task Successful analysis task.
+ * @param endpoint Authenticated experiment or demo resource path.
+ * @returns Self-contained setup HTML for a downloads-only sandbox, or null.
+ */
+export function createSetupDocument(bundle: PreviewBundle, session: string, id: string, revision: number, task: string, endpoint: '/api/experiment-preview' | '/api/experiment-demo' = '/api/experiment-preview'): string | null {
+  if (bundle.setup === null) return null
+  let html = bundle.setup.html.replace(/<script>[\s\S]*?<\/script>/g, '')
+    .replace(/<a id="animation"[^>]*>[\s\S]*?<\/a>/, '')
+    .replace(/<a href="[^"]+" target="_blank">(<img[^>]+>)<\/a>/g, '$1')
+  for (const [file, bytes] of Object.entries(bundle.setup.files)) {
+    const address = `${endpoint}?${new URLSearchParams({ id, revision: String(revision), session, task, resource: 'setup-file' })}&file=${encodeURIComponent(file)}`
+    const mime = file.endsWith('.png') ? 'image/png' : file.endsWith('.csv') ? 'text/csv' : 'application/json'
+    const escaped = address.replaceAll('&', '&amp;')
+    html = html.replaceAll(`href="${escaped}" download`, `href="${escaped}" download="${file}"`)
+      .replaceAll(escaped, `data:${mime};base64,${base64(bytes)}`)
+  }
+  return `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">${html}`
+}
+
+/**
+ * Create a self-contained opaque-origin animation document from checked resources.
+ * @param bundle Resources already validated against the selected task.
+ * @param session Owning session identifier.
+ * @param id Experiment identifier.
+ * @param revision Checked revision.
+ * @param task Successful analysis task.
+ * @param endpoint Authenticated preview path; defaults to the experiment endpoint.
+ * @returns Animation HTML for a scripts-only sandbox.
+ */
 export function createPreviewDocument(bundle: PreviewBundle, session: string, id: string, revision: number, task: string, endpoint: '/api/experiment-preview' | '/api/experiment-demo' = '/api/experiment-preview'): string {
   const url = (resource: string) => `${endpoint}?${new URLSearchParams({ id, revision: String(revision), session, task, resource })}`
   let viewer = text(bundle.viewer)
