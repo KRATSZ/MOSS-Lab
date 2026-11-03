@@ -41,9 +41,9 @@ node --import tsx/esm --test internal/experiment/tests/experiment.test.mjs inter
 
 ## 预览组件
 
-`buildPreview` 仅在最新 `protocol-analysis` 检查与当前会话、版本、协议哈希和分析结果的 SHA-256 一致时，从分析数据构建临时 Flex3D 场景。调用方必须从可信检查执行器获取分析数据；存储接受调用方提供的结果，本身不建立这一信任。调用方负责返回目录及其清理。场景生成以受限环境和超时运行本地 Python 播放器库，但不隔离进程，也不执行协议 Python。场景构建测试已从最小分析数据生成 Flex 视图；测试没有运行协议，也不表明实验安全。
+`buildPreview` 核对会话、实验版本、协议摘要和最新分析摘要后，通过固定版本插件的 `protocol_artifacts` 获取独立页面。MOSS 校验接口、版本和摘要，只将生成的 HTML 缓存在自己的私有预览目录；不导入插件 Python，也不改写播放器 JavaScript。动画和配置图可独立使用；配置图展示声明的起始装液，不推算终点成分。
 
-`PreviewResources` 将已发布的预览映射到固定的播放器、脚本、数据和图片资源，并在每次请求时重新检查当前版本和最新分析。在应用目录运行 `node moss-start.mjs` 启动本地工作台。启动器将 `labscriptai-ot/.venv/bin` 放在网页进程及其子进程的 `PATH` 首位并设置 `VIRTUAL_ENV`；Agent 指引要求 Python 工作使用该环境，并通过 `analyze_experiment` 分析协议。显式指定解释器路径或覆盖环境变量仍可选择其他环境。工作流通过 DSH 沙箱调用 Opentrons，并在有结构化协议错误时报告其详情。沙箱限制写入，但不阻止读取或网络访问，协议代码因此可能连接设备。演示分析内置示例。本地集成测试已分析修改过的示例协议并发布当前会话预览；模拟不能证明设备就绪或实验安全。播放器使用 LabscriptAI Research Citation License v1.0；引用和商业使用条款见项目实施记录。
+`PreviewResources` 在提供固定的 `animation` / `setup` 资源或清单内的下载文件前，重新核对当前归属及任务。`runtime-plugin.mjs` 使用 MCP SDK，只调用 `simulate_protocol` 与 `protocol_artifacts`；整个插件进程由 DSH 沙箱限制为仅可写私有调用目录。沙箱限制写入，不阻止读取或联网。失败或中断的 MCP 调用会保留私有文件，因为无法确定子进程是否终止；清理前应检查配置的插件数据目录。插件代码和依赖独立安装并锁定版本，见 [MOSS 安装](../../MOSS-LAB.md)。
 
 通过的 `protocol-analysis` 检查在 SHA-256 之外保存完整分析数据（`analysisBase64`）。`get_experiment` 的检查结果不返回这些数据；内部仍可使用它们恢复预览。已发布预览和会话内选择仅保存在进程内存中；重启后轮询某会话状态且没有已选预览时，状态路由会用该会话最新实验的最新通过检查所保存的分析数据重建场景，校验其摘要，并在重建完成前返回 `checking`。每个进程对每项已完成检查最多尝试一次恢复；检查通过前的轮询不会消耗这次尝试。分析持久化开始之前记录的检查无法恢复。
 

@@ -6,6 +6,7 @@ import css from './Experiment.module.css'
 
 /** Check the current experiment on each mount and explicit refresh. */
 export function ExperimentBody({ t, useResource, useTabInfo, sessionId }: PropsLocale<'sidebarExperiment'> & PropsRuntime<'sidebar.right.pane.tab'>): ReactNode {
+  const [viewMode, setViewMode] = useState<'animation' | 'setup'>('animation')
   const [generation, setGeneration] = useState(0)
   const [robotGeneration, setRobotGeneration] = useState(0)
   const [demoTask, setDemoTask] = useState<string | null | undefined>(undefined)
@@ -26,11 +27,16 @@ export function ExperimentBody({ t, useResource, useTabInfo, sessionId }: PropsL
       {demo && <div className={css.demoInfo}>
         <strong>{t('demoLabel')}</strong>
         <div>{t('demoControls')}</div>
-        <div>{t('demoUnavailable')}</div>
       </div>}
       <div className={css.toolbar}>
+        <Button size="sm" variant="outline" aria-pressed={viewMode === 'animation'} onClick={() => { setViewMode('animation') }}>{t('showAnimation')}</Button>
+        <Button size="sm" variant="outline" aria-pressed={viewMode === 'setup'} onClick={() => { setViewMode('setup') }}>{t('setupImage')}</Button>
         <Button size="sm" variant="outline" onClick={() => { setDemoTask(demo ? undefined : task ?? null) }}>{t(demo ? 'returnToExperiment' : 'viewDemo')}</Button>
         <Button size="sm" variant="outline" onClick={() => { setGeneration(value => value + 1) }}>{t('refresh')}</Button>
+        {ready && ready.files.length > 0 && <details className={css.downloads}>
+          <summary>{t('download')}</summary>
+          {ready.files.map(file => <a key={file} download={file} href={`${demo ? 'api/experiment-demo' : 'api/experiment-preview'}?${new URLSearchParams({ id: ready.id, revision: String(ready.revision), session: demo ? 'demo' : sessionId, task: ready.task, resource: 'file', file })}`}>{file}</a>)}
+        </details>}
         <Button size="sm" variant="outline" onClick={() => { setRobotGeneration(value => value + 1) }}>{t('robotQuery')}</Button>
       </div>
       {robotGeneration > 0 && <div className={css.robotInfo} role="status">
@@ -47,7 +53,13 @@ export function ExperimentBody({ t, useResource, useTabInfo, sessionId }: PropsL
             </>}
       </div>}
       {ready
-        ? <iframe className={css.frame} title={t('title')} sandbox="allow-scripts" srcDoc={ready.document} />
+        ? viewMode === 'setup'
+          ? ready.setupDocument === null
+            ? <div className={css.waiting} role="status">{t('setupUnavailable')}</div>
+            : <iframe key="setup" className={css.frame} title={t('setupImage')} sandbox="" srcDoc={ready.setupDocument} />
+          : ready.document === null
+            ? <div className={css.waiting} role="status">{t('previewUnavailable')}</div>
+            : <iframe key="animation" className={css.frame} title={t('title')} sandbox="allow-scripts" srcDoc={ready.document} />
         : <div className={css.waiting}><div role={failed ? 'alert' : 'status'}>{message}</div></div>}
     </div>
   )

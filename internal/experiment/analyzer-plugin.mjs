@@ -1,14 +1,10 @@
-import { analyzeProtocol } from './run-example.mjs'
-
+/** Delegate protocol analysis to the public, confined LabscriptAI MCP adapter. */
 export const name = 'protocol-analyzer'
-export const inject = ['sandbox', 'subprocess']
+export const inject = ['labscriptaiRuntime']
 
-/** Analyze saved protocol source in a DSH-confined uv Python process. */
-export function apply(ctx, config) {
-  if (!config || typeof config.temporaryRoot !== 'string' || typeof config.python !== 'string' || !Number.isSafeInteger(config.timeoutMs) || config.timeoutMs <= 0) throw new Error('protocol-analyzer requires temporaryRoot, python and a positive timeoutMs')
+/** Publish the analysis service consumed by the experiment workflow. */
+export function apply(ctx) {
   ctx.effect(() => ctx.provide('protocolAnalyzer', {
-    analyze(protocol) {
-      return analyzeProtocol({ ...config, sandbox: ctx.sandbox, subprocess: ctx.subprocess }, protocol)
-    },
+    analyze(protocol) { return ctx.labscriptaiRuntime.analyze(protocol) },
   }), 'protocol-analyzer.service')
 }

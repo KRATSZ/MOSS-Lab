@@ -1,10 +1,9 @@
 import type { ResourceProvider } from '@deepseek-ai/dsh-client-resources/client'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { fetchPreviewBundle } from './bundle.ts'
-import { createPreviewDocument } from './document.ts'
 
 /** Status returned by the experiment preview service. */
-export type ExperimentStatus = { readonly status: 'waiting' | 'checking' } | { readonly status: 'ready'; readonly id: string; readonly revision: number; readonly task: string; readonly document: string }
+export type ExperimentStatus = { readonly status: 'waiting' | 'checking' } | { readonly status: 'ready'; readonly id: string; readonly revision: number; readonly task: string; readonly document: string | null; readonly setupDocument: string | null; readonly files: readonly string[] }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface ResourceProtocolMap {
@@ -26,7 +25,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   }
 }
 
-/** Device status and available health and instrument details. */
+/** Read-only device response; unavailable fields remain explicitly null. */
 export type RobotStatus = {
   readonly status: 'not_configured' | 'unreachable' | 'partial' | 'ready'
   readonly queriedAt: string
@@ -93,10 +92,10 @@ export const watchProvider: ResourceProvider<'experimentwatch'> = {
         if (!response.ok) throw new Error('Status request failed')
         const status = parseStatus(await response.json())
         if (status === undefined) throw new Error('Invalid status response')
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the status fetch is awaited.
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- cancellation can occur while a request is awaited.
         if (!signal.aborted) yield { ok: true, value: status }
       } catch {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the status fetch is awaited.
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- cancellation can occur while a request is awaited.
         if (!signal.aborted) yield { ok: false, error: new RemoteError('experiment/status-unavailable', 'Experiment status is unavailable.', {}) }
       }
       await delay(signal)
@@ -126,23 +125,22 @@ export const statusProvider: ResourceProvider<'experimentstatus'> = {
         if (status === undefined) throw new Error('Invalid status response')
         if (status.status !== 'ready') {
           previous = undefined
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the status fetch is awaited.
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- cancellation can occur while a request is awaited.
           if (!signal.aborted) yield { ok: true, value: status }
         } else if (previous?.id !== status.id || previous.revision !== status.revision || previous.task !== status.task) {
           previous = undefined
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the status fetch is awaited.
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- cancellation can occur while a request is awaited.
           if (!signal.aborted) yield { ok: true, value: { status: 'checking' } }
           const bundle = await fetchPreviewBundle(session, status.id, status.revision, status.task, signal, endpoint)
-          const document = createPreviewDocument(bundle, session, status.id, status.revision, status.task, endpoint)
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the preview bundle is awaited.
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- cancellation can occur while a request is awaited.
           if (!signal.aborted) {
             previous = status
-            yield { ok: true, value: { ...status, document } }
+            yield { ok: true, value: { ...status, ...bundle } }
           }
         }
       } catch {
         previous = undefined
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while a fetch is awaited.
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- cancellation can occur while a request is awaited.
         if (!signal.aborted) yield {
           ok: false,
           error: new RemoteError('experiment/status-unavailable', 'Experiment status is unavailable.', {}),

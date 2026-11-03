@@ -59,14 +59,15 @@ graph TD
 - 兼容 OpenAI Chat Completions 的 HTTPS 模型服务地址与凭据。
 - 小智 MCP 硬件委派所必需的 WSS 接入地址；可选配置 Opentrons 设备 HTTP 地址。
 
+<a id="run"></a> <a id="run-from-source"></a>
+
 ## 快速开始
 
-在项目根目录下安装 Node 与 Python 依赖，并构建网页前端产物：
+在项目根目录安装 Node 依赖并构建网页产物；启动器会安装锁定的外部插件及其依赖：
 
 ```sh
 pnpm install
 pnpm run build
-uv sync --project labscriptai-ot --locked
 ```
 
 将环境配置文件模板 `.env.example` 复制为 `.env`，填入服务凭据。请务必妥善保管 `.env`，切勿公开：
@@ -77,6 +78,12 @@ node moss-start.mjs
 ```
 
 启动完成后，在浏览器中打开终端打印的授权登录链接。会话状态、实验快照与场景缓存均保存在本地 `.dsh-local/` 中。历史数据迁移说明参见 [MOSS Lab 配置与迁移指南](MOSS-LAB.md)。
+
+## 插件更新
+
+MOSS 调用 `simulate_protocol` 和 `protocol_artifacts`（产物接口 v1）。插件提供独立的动画与配置图 HTML；MOSS 校验摘要，并仅向当前已认证的会话、实验版本及分析任务提供页面，插件还提供经过校验的文件清单，用于受认证的 PNG/CSV/JSON 下载；不保留插件源码副本。启动使用已提交的锁文件，不会临时选择变化中的 `latest` 版本。
+
+每日 `labscriptai-sync` 工作流检查正式发布，更新归档摘要锁，安装候选版本并测试两个公开工具，通过后才创建升级草稿 PR。审查合并锁文件后，下次启动采用新版本；运行中的进程保留当前版本。初始锁固定到明确的源码提交，等待兼容版本正式发布。开发插件时可将 `LABSCRIPTAI_OT_ROOT` 指向本地仓库，启动日志会标记 `development`。运行 `node --import tsx/esm scripts/check-labscriptai.mjs` 可检查锁定版本，无需模型或机器人。
 
 ## 环境变量配置
 
@@ -94,19 +101,19 @@ node moss-start.mjs
 
 - `moss-start.mjs` 与 `moss-model.patch.yml`：负责配置并启动 Cordis 网页智能体框架。
 - `internal/`：存放实验存储库、重启恢复引擎、只读机器人遥测与小智 MCP 桥接插件。
-- `labscriptai-ot/`：收拢移液协议技能库、本地模拟环境依赖与 Flex3D MuJoCo 资产。
+- `labscriptai-ot.lock.json`：锁定外部插件归档、产物接口版本、插件版本和 SHA-256；安装目录为 `.dsh-local/plugins/`。
 - `packages/`、`apps/` 与 `vendor/`：DeepSeek Harness 核心插件基础设施与前端 Web 客户端。
 
 ## 来源与引用
 
-MOSS Lab 构建于 DeepSeek AI 开发的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 以及 [LabscriptAI OT](https://github.com/KRATSZ/labscriptai-ot)。所包含的 LabscriptAI OT 源码快照基于提交 `a3182eb5befc8ce535c33a225ae80b287e87c211`，并整合了本地播放器的适配修改。
+MOSS Lab 构建于 DeepSeek AI 开发的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 以及 [LabscriptAI OT](https://github.com/KRATSZ/labscriptai-ot)。MOSS 调用插件公开的 MCP 工具；模拟、动画、配置图、字体及渲染代码统一维护在插件仓库。
 
 任何利用 LabscriptAI OT 开展的研究成果、学术出版物或公开系统均须引用以下论文：
 
 > Gao, Yuan et al. “Autonomous Liquid-handling Robotics Scripting for Accessible and Responsible Protein Engineering.” bioRxiv, 2025. [doi:10.1101/2025.09.30.679666](https://doi.org/10.1101/2025.09.30.679666).
 
-更多信息参见 [LabscriptAI OT 引用元数据](labscriptai-ot/CITATION.cff) 与 [DeepSeek Harness 引用指南](https://github.com/deepseek-ai/deepseek-harness#citation)。
+更多信息参见 [LabscriptAI OT 引用元数据](https://github.com/KRATSZ/labscriptai-ot/blob/main/CITATION.cff) 与 [DeepSeek Harness 引用指南](https://github.com/deepseek-ai/deepseek-harness#citation)。
 
 ## 许可证
 
-本项目采用混合许可证管理体系。DeepSeek Harness 原有模块遵循 [MIT 许可证](LICENSE)。`labscriptai-ot/` 模块遵循 [LabscriptAI Research Citation License v1.0](labscriptai-ot/LICENSE)，该协议要求学术引用，且商业使用须取得事先书面授权，不属于 OSI 认证的通用开源许可证。随附协议库中的第三方示例协议保留原作者版权声明。完整信息请查阅[第三方声明文件](THIRD_PARTY_NOTICES.md)。
+本项目采用混合许可证管理体系。DeepSeek Harness 原有模块遵循 [MIT 许可证](LICENSE)。单独安装的 LabscriptAI OT 插件遵循 [LabscriptAI Research Citation License v1.0](https://github.com/KRATSZ/labscriptai-ot/blob/main/LICENSE)，该协议要求学术引用，且商业使用须取得事先书面授权，不属于 OSI 认证的通用开源许可证。随附协议库中的第三方示例协议保留原作者版权声明。完整信息请查阅[第三方声明文件](THIRD_PARTY_NOTICES.md)。

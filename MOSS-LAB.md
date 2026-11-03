@@ -4,56 +4,44 @@
 
 ## 中文
 
-MOSS Lab 在同一个项目中提供网页 Agent、本地 Opentrons 协议模拟和 Flex3D 动画。机器人相关源码位于 `labscriptai-ot/`；网页启动器不依赖同级的机器人项目。
+MOSS 负责定制的 DeepSeek Harness 网页、会话、MOS / 小智桥接和只读机器人状态；LabscriptAI 插件负责协议模拟、动画和配置图。两者通过公开 MCP 接口连接，不复制插件代码。
 
-准备 Node.js 24.9 或更高版本、pnpm 和 uv。在项目根目录安装 Node 依赖和构建产物，并在机器人源码目录按锁文件创建 Python 环境：
+准备 Node.js 24.9+、pnpm 11.28.5 和 uv。在根目录执行：
 
 ```sh
 pnpm install
 pnpm run build
-uv sync --project labscriptai-ot --locked
-```
-
-将项目根目录的 `.env.example` 复制为 `.env`，填写模型和小智配置。`OPENTRONS_URL` 仅用于可选的只读状态查询。`.env` 包含凭据，不要上传。随后从项目根目录启动：
-
-```sh
+cp .env.example .env
 node moss-start.mjs
 ```
 
-网页会话和实验数据库保存在项目根目录 `.dsh-local/`；该目录、`.env`、Python 虚拟环境和 Node 依赖都不应上传。若从旧布局迁移，请先停止旧网页服务，保留原始数据，再将原外层目录的 `.dsh-local/` 复制到本项目根目录。不要覆盖已有的数据目录。原外层 `.env` 中的配置也需要迁移到本项目根目录的 `.env`；请安全处理凭据。
+启动前填写 `.env` 模型配置，保持凭据私有。首次启动按 `labscriptai-ot.lock.json` 下载并校验外部插件，再由插件自己的安装器准备依赖。网络或校验失败会停止启动，不会临时换版本。版本与每日升级 PR 流程见 [README](README.zh.md#插件更新)。
 
-本地模拟和动画不证明设备就绪或实验安全。机器人状态查询不会执行设备动作；机器人连接需要可访问且兼容的服务。
+`.dsh-local/` 保存网页会话、实验数据库、插件安装和产物。升级前停止旧服务并备份此目录与 `.env`；保留已有数据库，不要用空目录覆盖。旧 `labscriptai-ot/.venv` 不再使用，确认没有独立用途后可自行删除。模拟及动画不代表机器人就绪；状态查询不会执行机器人动作。
 
 网页 CI 使用 `MOSS web` 工作流检查构建、类型、实验存储与预览资源，以及网页客户端启动。该工作流不部署网站，也不运行需要真实机器人或模型凭据的测试。
 
 ## English
 
-MOSS Lab combines the web agent, local Opentrons protocol simulation, and Flex3D animation in one project. Robot-related source is in `labscriptai-ot/`; the web launcher does not depend on a sibling robot project.
+MOSS owns the customized DeepSeek Harness web client, sessions, MOS / Xiaozhi bridge, and read-only robot status. The LabscriptAI plugin owns protocol simulation, animation, and setup figures. They connect through public MCP tools, without copying plugin code.
 
-Install Node.js 24.9 or later, pnpm, and uv. From the project root, install Node dependencies and build artifacts, then create the Python environment from the robot project's lockfile:
+Install Node.js 24.9+, pnpm 11.28.5, and uv. Run from the root:
 
 ```sh
 pnpm install
 pnpm run build
-uv sync --project labscriptai-ot --locked
-```
-
-Copy `.env.example` in the project root to `.env` and fill in the model and Xiaozhi configuration. `OPENTRONS_URL` is optional and used for read-only status queries. Keep `.env` private. Start from the project root:
-
-```sh
+cp .env.example .env
 node moss-start.mjs
 ```
 
-Web sessions and the experiment database are stored in `.dsh-local/` at the project root. Do not upload that directory, `.env`, the Python environment, or Node dependencies. To migrate from the previous layout, stop the old web service, preserve the original data, then copy the old outer directory's `.dsh-local/` into this project root. Do not overwrite an existing data directory. Migrate the old outer `.env` configuration to this project root as well, handling credentials securely.
+Fill in the model configuration before startup and keep `.env` private. The first start downloads and verifies the plugin specified in `labscriptai-ot.lock.json`, then runs the plugin's own dependency installer. Network or checksum errors stop startup instead of selecting another version. See [README](README.md#plugin-updates) for version management and daily upgrade PRs.
 
-Local simulation and animation do not establish device readiness or experimental safety. Status queries do not move the robot; a reachable compatible service is required.
+`.dsh-local/` stores web sessions, experiments, plugin installations, and artifacts. Stop the old service and back up this directory and `.env` before upgrading; preserve the existing database. The old `labscriptai-ot/.venv` is no longer used; remove it only after checking for independent uses. Simulation and animation do not establish robot readiness; status queries do not move the robot.
 
 The `MOSS web` workflow checks the build, types, experiment storage and preview resources, and web client boot. It does not deploy the site or run tests that require a real robot or model credentials.
 
 ## License and citation / 许可和引用
 
-DeepSeek Harness is distributed under its [MIT license](LICENSE). The included `labscriptai-ot/` code and resources retain the [LabscriptAI Research Citation License v1.0](labscriptai-ot/LICENSE) and [citation requirements](labscriptai-ot/CITATION.cff). Public use, including a public repository, requires this citation; commercial use requires written permission from the rights holder:
+DeepSeek Harness uses [MIT](LICENSE). The external plugin retains the [LabscriptAI Research Citation License v1.0](https://github.com/KRATSZ/labscriptai-ot/blob/main/LICENSE) and [citation requirements](https://github.com/KRATSZ/labscriptai-ot/blob/main/CITATION.cff). Public use must cite the following; commercial use requires written permission from the rights holder:
 
-Gao, Yuan et al., “Autonomous Liquid-handling Robotics Scripting for Accessible and Responsible Protein Engineering,” bioRxiv, 2025. DOI: [10.1101/2025.09.30.679666](https://doi.org/10.1101/2025.09.30.679666).
-
-The included robot source snapshot is based on commit `a3182eb5befc8ce535c33a225ae80b287e87c211`, with local Flex3D viewer changes. Its individual third-party notices remain in the source tree. Inclusion does not automatically install its separate MCP plugin or validate every optional plugin feature.
+Gao, Yuan et al. “Autonomous Liquid-handling Robotics Scripting for Accessible and Responsible Protein Engineering.” bioRxiv, 2025. [DOI: 10.1101/2025.09.30.679666](https://doi.org/10.1101/2025.09.30.679666).

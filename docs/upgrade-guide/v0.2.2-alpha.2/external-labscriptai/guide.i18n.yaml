@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-alpha.2/external-labscriptai/guide.md
+/:
+  en: 9326c5696d2b2f35
+  zh: e80f9e8f499b8ee1
+/external-labscriptai-plugin:
+  en: 7801caf5c4f441c3
+  zh: 0ac8f107930a2933
+/external-labscriptai-plugin/change:
+  en: 83cfe7536250f791
+  zh: c30debeb87ce9c9c
+/external-labscriptai-plugin/migration:
+  en: 55b703560177b938
+  zh: afe999d765ead0be
