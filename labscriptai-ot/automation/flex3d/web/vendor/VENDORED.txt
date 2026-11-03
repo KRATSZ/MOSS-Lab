@@ -1,1 +1,0 @@
-three r170 MIT. Used only for orbiting the Flex MuJoCo meshes in the browser.

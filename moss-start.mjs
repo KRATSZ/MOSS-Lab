@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { loadEnvFile } from 'node:process'
 import { ExperimentStore } from './internal/experiment/index.mjs'
-import { mossPythonEnvironment } from './internal/moss-python-env.mjs'
+import { ensurePluginRuntime } from './scripts/labscriptai-runtime.mjs'
 
 const root = dirname(fileURLToPath(import.meta.url))
 const project = root
@@ -28,6 +28,8 @@ if (!existsSync(experimentDb)) {
   const store = new ExperimentStore({ path: experimentDb, create: true })
   store.close()
 }
+const runtime = await ensurePluginRuntime(project)
+console.error(`LabscriptAI OT ${runtime.version} (${runtime.revision}), artifact API ${runtime.artifact_api}`)
 const originalPatch = readFileSync(resolve(root, 'moss-model.patch.yml'), 'utf8')
 const chatName = "name: './internal/chat-tools.mjs'"
 if (!originalPatch.includes(chatName)) throw new Error('moss-model.patch.yml 缺少 chat 工具插件配置')
@@ -38,7 +40,7 @@ writeFileSync(patchPath, originalPatch.replace(chatName, `name: ${JSON.stringify
 const child = spawn(process.execPath, [
   '--import', 'tsx/esm', 'apps/cli/src/bin.ts', '--profile', 'web',
   '--patch', patchPath, ...process.argv.slice(2),
-], { cwd: root, env: { ...mossPythonEnvironment(project, process.env), DSH_HOME: dataDir, MOSS_EXPERIMENT_DB: experimentDb, MOSS_FLEX_ROOT: resolve(project, 'labscriptai-ot/automation/flex3d'), MOSS_PREVIEW_TMP: previewDir }, stdio: 'inherit' })
+], { cwd: root, env: { ...process.env, DSH_HOME: dataDir, MOSS_EXPERIMENT_DB: experimentDb, MOSS_PLUGIN_ROOT: runtime.root, MOSS_PLUGIN_DATA: runtime.data, LABSCRIPTAI_HOME: runtime.dependencyHome, MOSS_PLUGIN_VERSION: runtime.version, MOSS_PREVIEW_TMP: previewDir }, stdio: 'inherit' })
 process.on('exit', cleanup)
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal))
 child.on('error', error => { console.error('网页启动失败:', error.message); process.exitCode = 1 })

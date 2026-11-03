@@ -1,37 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { analyzeProtocol } from '../run-example.mjs'
+import { createPluginClient } from '../plugin-client.mjs'
 
-test('does not spawn when the sandbox is unavailable and cleans up its input', async () => {
+test('does not spawn the MCP server when confinement is unavailable and cleans up input', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'analyzer-denied-'))
-  let spawned = false
-  try {
-    await assert.rejects(analyzeProtocol({
-      temporaryRoot: directory, python: '/python', timeoutMs: 1000,
-      sandbox: { async confine() { throw new Error('sandbox unavailable') } },
-      subprocess: { async resolveExecutable() { return '/python' }, spawn() { spawned = true } },
-    }, 'def run(protocol): pass'), /sandbox unavailable/)
-    assert.equal(spawned, false)
-    assert.deepEqual(await readdir(directory), [])
-  } finally {
-    await rm(directory, { recursive: true, force: true })
-  }
-})
-
-test('reports structured protocol errors instead of an unrelated traceback', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'analyzer-error-'))
-  try {
-    const subprocess = {
-      async resolveExecutable() { return '/python' },
-      spawn({ cwd }) {
-        const done = writeFile(join(cwd, 'analysis.json'), JSON.stringify({ errors: [{ detail: 'Unknown labware example in protocol.py line 8' }] })).then(() => ({ exitCode: 255, signal: null }))
-        return { done, terminate() {}, async waitForExit() { return true }, collected: { stderr: { readFrom() { return { text: 'long traceback' } } } } }
-      },
-    }
-    await assert.rejects(analyzeProtocol({ temporaryRoot: directory, python: '/python', timeoutMs: 1000, sandbox: { async confine(argv) { return { argv } } }, subprocess }, 'def run(protocol): pass'), /Unknown labware example in protocol.py line 8/)
-    assert.deepEqual(await readdir(directory), [])
-  } finally { await rm(directory, { recursive: true, force: true }) }
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const client = createPluginClient({ data: directory, root: '/missing-plugin', dependencyHome: '/dependencies', version: '0.1.3', timeoutMs: 150000,
+    sandbox: { async confine() { throw new Error('sandbox unavailable') } } })
+  await assert.rejects(client.analyze('def run(protocol): pass'), /sandbox unavailable/)
+  assert.deepEqual(await readdir(directory), [])
 })

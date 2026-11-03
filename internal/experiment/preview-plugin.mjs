@@ -4,12 +4,12 @@ import { buildPreview } from './preview.mjs'
 import { PreviewResources } from './preview-resources.mjs'
 
 export const name = 'experiment-preview'
-export const inject = ['connection', 'experimentStore']
+export const inject = ['connection', 'experimentStore', 'labscriptaiRuntime']
 
 /** Mount preview resources on the authenticated Connection carrier. */
 export function apply(ctx, config) {
-  if (!config || typeof config.flexRoot !== 'string' || typeof config.python !== 'string' || typeof config.temporaryRoot !== 'string' || !Number.isSafeInteger(config.timeoutMs) || config.timeoutMs <= 0) throw new Error('experiment-preview requires flexRoot, python, temporaryRoot, and a positive timeoutMs')
-  const resources = new PreviewResources(ctx.experimentStore, config.flexRoot)
+  if (!config || typeof config.temporaryRoot !== 'string' || !Number.isSafeInteger(config.timeoutMs) || config.timeoutMs <= 0) throw new Error('experiment-preview requires temporaryRoot and a positive timeoutMs')
+  const resources = new PreviewResources(ctx.experimentStore)
   // Rebuild a preview from the analysis persisted with its passed check after a restart.
   // Each completed analysis is attempted at most once per process.
   const recover = sessionId => {
@@ -55,7 +55,7 @@ export function apply(ctx, config) {
       if (preparing.has(input.id)) throw new Error('experiment preview is already being prepared')
       preparing.add(input.id)
       const operation = (async () => {
-        const preview = await buildPreview({ ...input, store: ctx.experimentStore, flexRoot: config.flexRoot, python: config.python, temporaryRoot: config.temporaryRoot, timeoutMs: config.timeoutMs })
+        const preview = await buildPreview({ ...input, store: ctx.experimentStore, runtime: ctx.labscriptaiRuntime, temporaryRoot: config.temporaryRoot, timeoutMs: config.timeoutMs })
         if (closing) {
           await rm(preview.directory, { recursive: true, force: true })
           throw new Error('experiment preview is closing')

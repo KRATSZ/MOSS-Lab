@@ -138,7 +138,7 @@ describe('experiment animation entry', () => {
       addresses.push(address)
       if (address.startsWith('dsh-resource://experimentwatch/')) return { status: 'live', value: { status: 'waiting' }, failure: undefined }
       return address.includes('mode=demo')
-        ? { status: 'live', value: { status: 'ready', id: 'demo', revision: 1, task: 'task', document: '<p>demo</p>' }, failure: undefined }
+        ? { status: 'live', value: { status: 'ready', id: 'demo', revision: 1, task: 'task', document: '<p>demo</p>', setupDocument: null, files: [] }, failure: undefined }
         : { status: 'live', value: { status: 'waiting' }, failure: undefined }
     }) as UseResource
     const props = { sessionId: 'session', useTabInfo: () => ({ tab: { id: 'tab' } }), useResource } as PropsRuntime<'sidebar.right.pane.tab'>
@@ -146,7 +146,6 @@ describe('experiment animation entry', () => {
     fireEvent.click(screen.getByRole('button', { name: zh.viewDemo }))
     expect(screen.getByText(zh.demoLabel)).toBeTruthy()
     expect(screen.getByText(zh.demoControls)).toBeTruthy()
-    expect(screen.getByText(zh.demoUnavailable)).toBeTruthy()
     expect(view.container.querySelector('iframe')?.getAttribute('srcdoc')).toBe('<p>demo</p>')
     expect(addresses.filter(address => address.startsWith('dsh-resource://experimentstatus/')).at(-1)).toContain('?mode=demo')
     fireEvent.click(screen.getByRole('button', { name: zh.returnToExperiment }))
@@ -161,7 +160,7 @@ describe('experiment animation entry', () => {
     const useResource = ((address: string) => {
       if (address.startsWith('dsh-resource://experimentwatch/')) return { status: 'live', value: task ? { status: 'ready', id: 'x', revision: 1, task } : { status: 'waiting' }, failure: undefined }
       return address.includes('mode=demo')
-        ? { status: 'live', value: { status: 'ready', id: 'demo', revision: 1, task: 'demo', document: '<p>demo</p>' }, failure: undefined }
+        ? { status: 'live', value: { status: 'ready', id: 'demo', revision: 1, task: 'demo', document: '<p>demo</p>', setupDocument: null, files: [] }, failure: undefined }
         : { status: 'live', value: { status: 'waiting' }, failure: undefined }
     }) as UseResource
     const props = { sessionId: 'session', useTabInfo: () => ({ tab: { id: 'tab' } }), useResource } as PropsRuntime<'sidebar.right.pane.tab'>
@@ -178,12 +177,19 @@ describe('experiment animation entry', () => {
   })
 
   it('renders an opaque sandbox when resources are ready', () => {
-    const useResource = (() => ({ status: 'live', value: { status: 'ready', id: 'x', revision: 2, task: 't', document: '<p>viewer</p>' }, failure: undefined })) as UseResource
+    const useResource = (() => ({ status: 'live', value: { status: 'ready', id: 'x', revision: 2, task: 't', document: '<p>viewer</p>', setupDocument: '<p>setup</p>', files: ['wells.csv'] }, failure: undefined })) as UseResource
     const props = { sessionId: 'session', useTabInfo: () => ({ tab: { id: 'tab' } }), useResource } as PropsRuntime<'sidebar.right.pane.tab'>
     const view = render(<ExperimentBody {...props} t={key => key} />)
     const frame = view.container.querySelector('iframe')!
     expect(frame.getAttribute('sandbox')).toBe('allow-scripts')
     expect(frame.getAttribute('srcdoc')).toBe('<p>viewer</p>')
+    fireEvent.click(screen.getByRole('button', { name: 'setupImage' }))
+    const setup = view.container.querySelector('iframe')!
+    expect(setup.getAttribute('sandbox')).toBe('')
+    expect(setup.getAttribute('srcdoc')).toBe('<p>setup</p>')
+    fireEvent.click(screen.getByText('download'))
+    expect(screen.getByRole('link', { name: 'wells.csv' }).getAttribute('href')).toContain('resource=file&file=wells.csv')
+
     view.unmount()
   })
 

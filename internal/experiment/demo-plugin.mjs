@@ -6,11 +6,11 @@ import { buildPreview } from './preview.mjs'
 import { PreviewResources } from './preview-resources.mjs'
 
 export const name = 'experiment-demo'
-export const inject = ['connection', 'protocolAnalyzer']
+export const inject = ['connection', 'protocolAnalyzer', 'labscriptaiRuntime']
 
 /** Provide a clearly marked, disposable simulation without touching user experiments. */
 export function apply(ctx, config) {
-  if (!config || typeof config.flexRoot !== 'string' || typeof config.python !== 'string' || typeof config.temporaryRoot !== 'string' || !Number.isSafeInteger(config.timeoutMs) || config.timeoutMs <= 0) throw new Error('experiment-demo requires scene paths and timeout')
+  if (!config || typeof config.temporaryRoot !== 'string' || !Number.isSafeInteger(config.timeoutMs) || config.timeoutMs <= 0) throw new Error('experiment-demo requires scene paths and timeout')
   let closing = false
   let resources
   let directory
@@ -23,9 +23,9 @@ export function apply(ctx, config) {
     const experiment = store.createForSession('demo', { creationKey: 'demo', snapshot: { protocol } }).experiment
     const task = store.startCheck({ id: experiment.id, revision: 1, protocolHash: experiment.protocolHash, name: 'protocol-analysis' })
     store.finishCheck({ ...task, status: 'passed', result: { analysisSha256: createHash('sha256').update(analysis).digest('hex') } })
-    const preview = await buildPreview({ store, id: experiment.id, revision: 1, sessionId: 'demo', analysis, python: config.python, flexRoot: config.flexRoot, temporaryRoot: directory, timeoutMs: config.timeoutMs })
+    const preview = await buildPreview({ store, id: experiment.id, revision: 1, sessionId: 'demo', analysis, runtime: ctx.labscriptaiRuntime, temporaryRoot: directory, timeoutMs: config.timeoutMs })
     if (!closing) {
-      resources = new PreviewResources(store, config.flexRoot, '/api/experiment-demo')
+      resources = new PreviewResources(store, '/api/experiment-demo')
       resources.publish(preview)
       resources.select(experiment.id)
     }
