@@ -16,7 +16,6 @@
       name: ./internal/experiment/preview-plugin.mjs
       config:
         temporaryRoot: !!js process.env.MOSS_PREVIEW_TMP
-        timeoutMs: 60000
     - id: robot-status
       name: ./internal/experiment/robot-status-plugin.mjs
       config:
@@ -24,9 +23,6 @@
         maxBytes: 262144
     - id: protocol-analyzer
       name: ./internal/experiment/analyzer-plugin.mjs
-      config:
-        temporaryRoot: !!js process.env.MOSS_PREVIEW_TMP
-        timeoutMs: 60000
     - id: experiment-workflow
       name: ./internal/experiment/workflow-plugin.mjs
     - id: experiment-agent-tools
@@ -35,7 +31,6 @@
       name: ./internal/experiment/demo-plugin.mjs
       config:
         temporaryRoot: !!js process.env.MOSS_PREVIEW_TMP
-        timeoutMs: 60000
     - id: xiaozhi-readonly
       name: ./internal/xiaozhi/plugin.mjs
       config:
