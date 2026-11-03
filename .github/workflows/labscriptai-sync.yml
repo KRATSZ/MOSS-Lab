@@ -43,10 +43,14 @@ jobs:
             ## Motivation
             保持外部插件同步，避免复制源码。Refs #13。
             ## Changes
-            **Runtime:** 更新版本与归档 SHA-256；现有实验进程继续使用原版本。
+            **Interface changes:** None.
+            **Behavior changes:** 更新版本与归档 SHA-256；现有实验进程继续使用原版本。
             ## Testing
             **Test design:** 固定候选版本必须仍能分析协议、生成动画与配置图，并列出可下载文件。
             **Test entries:** `node --import tsx/esm scripts/check-labscriptai.mjs` 已在本次工作流通过；失败时不创建 PR。
+            <details><summary>Proof</summary>
+            [本次兼容检查日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            </details>
             ## AI Usage
             <!-- ai-declaration:start -->
             [![AI-DECLARATION: hint](https://img.shields.io/badge/䷼%20AI--DECLARATION-hint-ecfccb?labelColor=ecfccb)](https://ai-declaration.md)
