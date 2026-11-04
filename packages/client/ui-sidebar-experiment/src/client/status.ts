@@ -26,6 +26,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   }
 }
 
+/** Device status and available health and instrument details. */
 export type RobotStatus = {
   readonly status: 'not_configured' | 'unreachable' | 'partial' | 'ready'
   readonly queriedAt: string

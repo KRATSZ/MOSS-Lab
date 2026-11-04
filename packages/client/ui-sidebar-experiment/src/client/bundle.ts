@@ -16,7 +16,16 @@ const MAX_TEXTURES = 64
 
 type Resource = 'viewer' | 'script' | 'orbit' | 'three' | 'info' | 'analysis' | 'view' | 'asset'
 
-/** Fetch all resources without allowing unbounded responses or mixed revisions. */
+/**
+ * Fetch bounded preview resources and verify that the revision remains current.
+ * @param session - Owning session identifier.
+ * @param id - Experiment identifier.
+ * @param revision - Experiment revision.
+ * @param task - Task identifier.
+ * @param signal - Cancels resource requests.
+ * @param endpoint - Preview or demonstration resource endpoint.
+ * @returns Resources for the checked revision.
+ */
 export async function fetchPreviewBundle(session: string, id: string, revision: number, task: string, signal: AbortSignal, endpoint: '/api/experiment-preview' | '/api/experiment-demo' = '/api/experiment-preview'): Promise<PreviewBundle> {
   let total = 0
   async function read(resource: Resource, file?: string): Promise<Uint8Array> {

@@ -135,10 +135,21 @@ export const zh: Record<AgentPresetSettingsKey, string> = {
 import { isBuiltInPreset as isRegistryBuiltInPreset, presetDisplayText as registryDisplayText } from '@deepseek-ai/dsh-agent-preset-registry/display'
 import type { PresetDisplaySource, PresetDisplayText } from '@deepseek-ai/dsh-agent-preset-registry/display'
 
+/**
+ * Identify a preset with localized built-in copy.
+ * @param preset - Preset identity and optional published name.
+ * @returns Whether the preset is an unnamed built-in.
+ */
 export function isBuiltInPreset(preset: PresetDisplaySource): boolean {
   return (preset.id === 'chat' && preset.name === undefined) || isRegistryBuiltInPreset(preset)
 }
 
+/**
+ * Resolve localized built-in or published preset text.
+ * @param preset - Preset identity and published text.
+ * @param t - Translator for preset display keys.
+ * @returns Display name and description.
+ */
 export function presetDisplayText(preset: PresetDisplaySource, t: (key: AgentPresetSettingsKey) => string): PresetDisplayText {
   if (preset.id === 'chat' && preset.name === undefined) {
     return { name: t('presetChatName'), description: t('presetChatDescription') }

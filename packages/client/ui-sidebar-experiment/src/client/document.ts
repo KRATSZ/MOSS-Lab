@@ -17,7 +17,16 @@ function replaceRequired(source: string, target: string, replacement: string): s
   return source.replaceAll(target, replacement)
 }
 
-/** Create a self-contained opaque-origin preview document from checked resources. */
+/**
+ * Create a self-contained opaque-origin preview document from checked resources.
+ * @param bundle - Resources for the checked revision.
+ * @param session - Owning session identifier.
+ * @param id - Experiment identifier.
+ * @param revision - Experiment revision.
+ * @param task - Task identifier.
+ * @param endpoint - Preview or demonstration resource endpoint.
+ * @returns HTML for the isolated preview.
+ */
 export function createPreviewDocument(bundle: PreviewBundle, session: string, id: string, revision: number, task: string, endpoint: '/api/experiment-preview' | '/api/experiment-demo' = '/api/experiment-preview'): string {
   const url = (resource: string) => `${endpoint}?${new URLSearchParams({ id, revision: String(revision), session, task, resource })}`
   let viewer = text(bundle.viewer)
