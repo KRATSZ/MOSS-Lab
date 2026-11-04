@@ -64,6 +64,23 @@ describe('concrete terminology policy', () => {
     )).toEqual([{ file: '.agents/notes/implemented/process/current.md', line: 1 }])
   })
 
+  it('excludes nested vendor directories and the embedded upstream project but scans owned files', () => {
+    for (const file of [
+      `labscriptai-ot/automation/${blockedTerm}.py`,
+      'labscriptai-ot/PUBLISHING.md',
+      `internal/automation/vendor/${blockedTerm}.py`,
+    ]) {
+      expect(findConcreteTermViolations(file, blockedTerm)).toEqual([])
+    }
+    for (const file of [
+      'internal/automation/vendor-helper.ts',
+      'internal/automation/vendor-notes.md',
+      'internal/automation/owned/example.py',
+    ]) {
+      expect(findConcreteTermViolations(file, blockedTerm)).toEqual([{ file, line: 1 }])
+    }
+  })
+
   it('preserves historical identifiers only in alpha and RC release schema snapshots', () => {
     for (const channel of ['alpha', 'rc']) {
       expect(findConcreteTermViolations(

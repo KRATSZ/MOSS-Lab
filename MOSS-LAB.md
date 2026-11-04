@@ -24,6 +24,8 @@ node moss-start.mjs
 
 本地模拟和动画不证明设备就绪或实验安全。机器人状态查询不会执行设备动作；机器人连接需要可访问且兼容的服务。
 
+网页 CI 使用 `MOSS web` 工作流检查构建、类型、实验存储与预览资源，以及网页客户端启动。该工作流不部署网站，也不运行需要真实机器人或模型凭据的测试。
+
 ## English
 
 MOSS Lab combines the web agent, local Opentrons protocol simulation, and Flex3D animation in one project. Robot-related source is in `labscriptai-ot/`; the web launcher does not depend on a sibling robot project.
@@ -45,6 +47,8 @@ node moss-start.mjs
 Web sessions and the experiment database are stored in `.dsh-local/` at the project root. Do not upload that directory, `.env`, the Python environment, or Node dependencies. To migrate from the previous layout, stop the old web service, preserve the original data, then copy the old outer directory's `.dsh-local/` into this project root. Do not overwrite an existing data directory. Migrate the old outer `.env` configuration to this project root as well, handling credentials securely.
 
 Local simulation and animation do not establish device readiness or experimental safety. Status queries do not move the robot; a reachable compatible service is required.
+
+The `MOSS web` workflow checks the build, types, experiment storage and preview resources, and web client boot. It does not deploy the site or run tests that require a real robot or model credentials.
 
 ## License and citation / 许可和引用
 

@@ -16,8 +16,17 @@ const MAX_TEXTURES = 64
 
 type Resource = 'viewer' | 'script' | 'orbit' | 'three' | 'info' | 'analysis' | 'view' | 'asset'
 
-/** Fetch all resources without allowing unbounded responses or mixed revisions. */
-export async function fetchPreviewBundle(session: string, id: string, revision: number, task: string, signal: AbortSignal, endpoint: '/api/experiment-preview' | '/api/experiment-demo' = '/api/experiment-preview'): Promise<PreviewBundle> {
+/**
+ * Fetch bounded preview resources and verify that the revision remains current.
+ * @param session - Owning session identifier.
+ * @param id - Experiment identifier.
+ * @param revision - Experiment revision.
+ * @param task - Task identifier.
+ * @param signal - Cancels resource requests.
+ * @param endpoint - Preview or demonstration resource endpoint.
+ * @returns Resources for the checked revision.
+ */
+export async function fetchPreviewBundle(session: string, id: string, revision: number, task: string, signal: AbortSignal, endpoint: 'api/experiment-preview' | 'api/experiment-demo' = 'api/experiment-preview'): Promise<PreviewBundle> {
   let total = 0
   async function read(resource: Resource, file?: string): Promise<Uint8Array> {
     const params = new URLSearchParams({ id, revision: String(revision), session, task, resource })
@@ -57,15 +66,16 @@ export async function fetchPreviewBundle(session: string, id: string, revision: 
   const parsed: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(view))
   if (typeof parsed !== 'object' || parsed === null || !('textures' in parsed) || !Array.isArray(parsed.textures)
     || parsed.textures.length > MAX_TEXTURES) throw new Error('Invalid preview textures')
-  const assets: Record<string, Uint8Array> = Object.create(null)
-  for (const texture of parsed.textures) {
+  const assets = Object.create(null) as Record<string, Uint8Array>
+  const textures: readonly unknown[] = parsed.textures
+  for (const texture of textures) {
     if (typeof texture !== 'object' || texture === null || !('file' in texture) || typeof texture.file !== 'string'
       || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.png$/.test(texture.file) || texture.file === '.' || texture.file === '..') {
       throw new Error('Invalid texture filename')
     }
     if (!(texture.file in assets)) assets[texture.file] = await read('asset', texture.file)
   }
-  const statusParams = new URLSearchParams(endpoint === '/api/experiment-demo' ? { resource: 'status' } : { resource: 'status', session })
+  const statusParams = new URLSearchParams(endpoint === 'api/experiment-demo' ? { resource: 'status' } : { resource: 'status', session })
   const response = await fetch(`${endpoint}?${statusParams}`, { signal, credentials: 'same-origin', cache: 'no-store' })
   if (!response.ok) throw new Error('Preview status unavailable')
   const status: unknown = await response.json()

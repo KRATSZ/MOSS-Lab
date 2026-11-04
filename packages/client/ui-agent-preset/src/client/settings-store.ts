@@ -54,7 +54,11 @@ export function requiresCodingTools(preset: AgentPresetOption | undefined): bool
   return preset !== undefined && isBuiltInPreset(preset) && (preset.id === 'ptc' || preset.id === 'minimal')
 }
 
-/** Restrict new tasks to the supported modes. */
+/**
+ * Restrict new tasks to the supported modes.
+ * @param preset - Roster entry to evaluate.
+ * @returns Whether the preset can be selected for a new task.
+ */
 export function isSelectablePreset(preset: AgentPresetOption): boolean {
   return preset.id === 'chat' || preset.id === 'standard'
 }

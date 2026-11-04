@@ -26,6 +26,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   }
 }
 
+/** Device status and available health and instrument details. */
 export type RobotStatus = {
   readonly status: 'not_configured' | 'unreachable' | 'partial' | 'ready'
   readonly queriedAt: string
@@ -41,7 +42,7 @@ export const robotStatusProvider: ResourceProvider<'robotstatus'> = {
   async *open(address, { signal }) {
     if (new URL(address).pathname === '/0') return
     try {
-      const response = await fetch('/api/robot-status', { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]) })
+      const response = await fetch('api/robot-status', { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]) })
       if (!response.ok) throw new Error('Status request failed')
       const value: unknown = await response.json()
       if (!isRobotStatus(value)) throw new Error('Invalid robot status')
@@ -88,12 +89,14 @@ export const watchProvider: ResourceProvider<'experimentwatch'> = {
       try {
         if (!session) throw new Error('Missing session')
         const params = new URLSearchParams({ resource: 'status', session })
-        const response = await fetch(`/api/experiment-preview?${params}`, { signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]), credentials: 'same-origin', cache: 'no-store' })
+        const response = await fetch(`api/experiment-preview?${params}`, { signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]), credentials: 'same-origin', cache: 'no-store' })
         if (!response.ok) throw new Error('Status request failed')
         const status = parseStatus(await response.json())
         if (status === undefined) throw new Error('Invalid status response')
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the status fetch is awaited.
         if (!signal.aborted) yield { ok: true, value: status }
       } catch {
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the status fetch is awaited.
         if (!signal.aborted) yield { ok: false, error: new RemoteError('experiment/status-unavailable', 'Experiment status is unavailable.', {}) }
       }
       await delay(signal)
@@ -112,7 +115,7 @@ export const statusProvider: ResourceProvider<'experimentstatus'> = {
         const demo = url.searchParams.get('mode') === 'demo'
         const session = demo ? 'demo' : decodeURIComponent(url.pathname.split('/')[1] ?? '')
         if (!session) throw new Error('Missing session')
-        const endpoint = demo ? '/api/experiment-demo' : '/api/experiment-preview'
+        const endpoint = demo ? 'api/experiment-demo' : 'api/experiment-preview'
         const params = new URLSearchParams(demo ? { resource: 'status' } : { resource: 'status', session })
         const response = await fetch(`${endpoint}?${params}`, {
           signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]), credentials: 'same-origin', cache: 'no-store',
@@ -123,12 +126,15 @@ export const statusProvider: ResourceProvider<'experimentstatus'> = {
         if (status === undefined) throw new Error('Invalid status response')
         if (status.status !== 'ready') {
           previous = undefined
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the status fetch is awaited.
           if (!signal.aborted) yield { ok: true, value: status }
         } else if (previous?.id !== status.id || previous.revision !== status.revision || previous.task !== status.task) {
           previous = undefined
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the status fetch is awaited.
           if (!signal.aborted) yield { ok: true, value: { status: 'checking' } }
           const bundle = await fetchPreviewBundle(session, status.id, status.revision, status.task, signal, endpoint)
           const document = createPreviewDocument(bundle, session, status.id, status.revision, status.task, endpoint)
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the preview bundle is awaited.
           if (!signal.aborted) {
             previous = status
             yield { ok: true, value: { ...status, document } }
@@ -136,6 +142,7 @@ export const statusProvider: ResourceProvider<'experimentstatus'> = {
         }
       } catch {
         previous = undefined
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while a fetch is awaited.
         if (!signal.aborted) yield {
           ok: false,
           error: new RemoteError('experiment/status-unavailable', 'Experiment status is unavailable.', {}),
