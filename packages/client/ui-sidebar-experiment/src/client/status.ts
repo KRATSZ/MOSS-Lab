@@ -93,8 +93,10 @@ export const watchProvider: ResourceProvider<'experimentwatch'> = {
         if (!response.ok) throw new Error('Status request failed')
         const status = parseStatus(await response.json())
         if (status === undefined) throw new Error('Invalid status response')
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the status fetch is awaited.
         if (!signal.aborted) yield { ok: true, value: status }
       } catch {
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the status fetch is awaited.
         if (!signal.aborted) yield { ok: false, error: new RemoteError('experiment/status-unavailable', 'Experiment status is unavailable.', {}) }
       }
       await delay(signal)
@@ -124,12 +126,15 @@ export const statusProvider: ResourceProvider<'experimentstatus'> = {
         if (status === undefined) throw new Error('Invalid status response')
         if (status.status !== 'ready') {
           previous = undefined
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the status fetch is awaited.
           if (!signal.aborted) yield { ok: true, value: status }
         } else if (previous?.id !== status.id || previous.revision !== status.revision || previous.task !== status.task) {
           previous = undefined
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the status fetch is awaited.
           if (!signal.aborted) yield { ok: true, value: { status: 'checking' } }
           const bundle = await fetchPreviewBundle(session, status.id, status.revision, status.task, signal, endpoint)
           const document = createPreviewDocument(bundle, session, status.id, status.revision, status.task, endpoint)
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while the preview bundle is awaited.
           if (!signal.aborted) {
             previous = status
             yield { ok: true, value: { ...status, document } }
@@ -137,6 +142,7 @@ export const statusProvider: ResourceProvider<'experimentstatus'> = {
         }
       } catch {
         previous = undefined
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- the signal can abort while a fetch is awaited.
         if (!signal.aborted) yield {
           ok: false,
           error: new RemoteError('experiment/status-unavailable', 'Experiment status is unavailable.', {}),

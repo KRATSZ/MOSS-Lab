@@ -66,8 +66,9 @@ export async function fetchPreviewBundle(session: string, id: string, revision: 
   const parsed: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(view))
   if (typeof parsed !== 'object' || parsed === null || !('textures' in parsed) || !Array.isArray(parsed.textures)
     || parsed.textures.length > MAX_TEXTURES) throw new Error('Invalid preview textures')
-  const assets: Record<string, Uint8Array> = Object.create(null)
-  for (const texture of parsed.textures) {
+  const assets = Object.create(null) as Record<string, Uint8Array>
+  const textures: readonly unknown[] = parsed.textures
+  for (const texture of textures) {
     if (typeof texture !== 'object' || texture === null || !('file' in texture) || typeof texture.file !== 'string'
       || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.png$/.test(texture.file) || texture.file === '.' || texture.file === '..') {
       throw new Error('Invalid texture filename')

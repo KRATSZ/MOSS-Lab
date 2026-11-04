@@ -67,7 +67,8 @@ describe('experiment animation entry', () => {
       expect(request).toHaveBeenCalledWith('/api/robot-status', expect.objectContaining({ credentials: 'same-origin' }))
       request.mockResolvedValueOnce(Response.json({ status: 'ready' }))
       const invalid = robotStatusProvider.open('dsh-resource://robotstatus/2', { signal: controller.signal })[Symbol.asyncIterator]()
-      expect((await invalid.next()).value?.ok).toBe(false)
+      const invalidFrame: unknown = (await invalid.next()).value
+      expect(invalidFrame).toMatchObject({ ok: false })
     } finally {
       controller.abort()
       request.mockRestore()
@@ -198,7 +199,8 @@ describe('experiment animation entry', () => {
       expect((await iterator.next()).value).toEqual({ ok: true, value: { status: 'waiting' } })
       const next = iterator.next()
       await vi.advanceTimersByTimeAsync(5000)
-      expect((await next).value?.ok).toBe(false)
+      const failedFrame: unknown = (await next).value
+      expect(failedFrame).toMatchObject({ ok: false })
       expect(request).toHaveBeenCalledTimes(2)
     } finally {
       controller.abort()
@@ -256,12 +258,12 @@ describe('experiment animation entry', () => {
   ])('reads a valid %s status from the same origin', async (body, expected) => {
     const request = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(body), { status: 200 }))
     const controller = new AbortController()
-    const frames = []
+    const frames: Array<{ ok: boolean; value?: unknown }> = []
     for await (const frame of statusProvider.open('dsh-resource://experimentstatus/test', { signal: controller.signal })) { frames.push(frame); controller.abort() }
     expect(frames).toEqual([{ ok: true, value: body }])
     expect((frames[0] && frames[0].ok ? frames[0].value as ExperimentStatus : undefined)?.status).toBe(expected)
     expect(request).toHaveBeenCalledWith('/api/experiment-preview?resource=status&session=test', {
-      signal: expect.any(AbortSignal), credentials: 'same-origin', cache: 'no-store',
+      signal: expect.any(AbortSignal) as AbortSignal, credentials: 'same-origin', cache: 'no-store',
     })
     request.mockRestore()
   })
