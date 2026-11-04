@@ -24,7 +24,7 @@ describe('experiment animation entry', () => {
       useSidebarMounted: (select: (value: string) => boolean) => select(visible),
       useStore: (select: (state: ReturnType<typeof store.getSnapshot>) => unknown) => select(store.getSnapshot()),
       actions: store.actions, openExperiment,
-    } as unknown as Parameters<typeof AutoOpenExperiment>[0]
+    } as Parameters<typeof AutoOpenExperiment>[0]
     const view = render(<AutoOpenExperiment {...props} />)
     expect(openExperiment).not.toHaveBeenCalled()
     visible = 'session'
@@ -64,7 +64,7 @@ describe('experiment animation entry', () => {
       expect(request).not.toHaveBeenCalled()
       const query = robotStatusProvider.open('dsh-resource://robotstatus/1', { signal: controller.signal })[Symbol.asyncIterator]()
       expect((await query.next()).value).toMatchObject({ ok: true, value: { status: 'ready', instruments: [] } })
-      expect(request).toHaveBeenCalledWith('/api/robot-status', expect.objectContaining({ credentials: 'same-origin' }))
+      expect(request).toHaveBeenCalledWith('api/robot-status', expect.objectContaining({ credentials: 'same-origin' }))
       request.mockResolvedValueOnce(Response.json({ status: 'ready' }))
       const invalid = robotStatusProvider.open('dsh-resource://robotstatus/2', { signal: controller.signal })[Symbol.asyncIterator]()
       const invalidFrame: unknown = (await invalid.next()).value
@@ -81,7 +81,7 @@ describe('experiment animation entry', () => {
     const iterator = watchProvider.open('dsh-resource://experimentwatch/session%20one', { signal: controller.signal })[Symbol.asyncIterator]()
     try {
       expect((await iterator.next()).value).toEqual({ ok: true, value: { status: 'ready', id: 'x', revision: 1, task: 't' } })
-      expect(request).toHaveBeenCalledWith('/api/experiment-preview?resource=status&session=session+one', expect.objectContaining({ credentials: 'same-origin' }))
+      expect(request).toHaveBeenCalledWith('api/experiment-preview?resource=status&session=session+one', expect.objectContaining({ credentials: 'same-origin' }))
     } finally {
       controller.abort()
       await iterator.return?.()
@@ -236,7 +236,7 @@ describe('experiment animation entry', () => {
     const iterator = statusProvider.open('dsh-resource://experimentstatus/real-session/tab/0?mode=demo', { signal: controller.signal })[Symbol.asyncIterator]()
     try {
       expect((await iterator.next()).value).toEqual({ ok: true, value: { status: 'waiting' } })
-      expect(request).toHaveBeenCalledWith('/api/experiment-demo?resource=status', expect.objectContaining({ credentials: 'same-origin', cache: 'no-store' }))
+      expect(request).toHaveBeenCalledWith('api/experiment-demo?resource=status', expect.objectContaining({ credentials: 'same-origin', cache: 'no-store' }))
     } finally {
       controller.abort()
       await iterator.return?.()
@@ -262,7 +262,7 @@ describe('experiment animation entry', () => {
     for await (const frame of statusProvider.open('dsh-resource://experimentstatus/test', { signal: controller.signal })) { frames.push(frame); controller.abort() }
     expect(frames).toEqual([{ ok: true, value: body }])
     expect((frames[0] && frames[0].ok ? frames[0].value as ExperimentStatus : undefined)?.status).toBe(expected)
-    expect(request).toHaveBeenCalledWith('/api/experiment-preview?resource=status&session=test', {
+    expect(request).toHaveBeenCalledWith('api/experiment-preview?resource=status&session=test', {
       signal: expect.any(AbortSignal) as AbortSignal, credentials: 'same-origin', cache: 'no-store',
     })
     request.mockRestore()

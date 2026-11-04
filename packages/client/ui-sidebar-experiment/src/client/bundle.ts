@@ -26,7 +26,7 @@ type Resource = 'viewer' | 'script' | 'orbit' | 'three' | 'info' | 'analysis' | 
  * @param endpoint - Preview or demonstration resource endpoint.
  * @returns Resources for the checked revision.
  */
-export async function fetchPreviewBundle(session: string, id: string, revision: number, task: string, signal: AbortSignal, endpoint: '/api/experiment-preview' | '/api/experiment-demo' = '/api/experiment-preview'): Promise<PreviewBundle> {
+export async function fetchPreviewBundle(session: string, id: string, revision: number, task: string, signal: AbortSignal, endpoint: 'api/experiment-preview' | 'api/experiment-demo' = 'api/experiment-preview'): Promise<PreviewBundle> {
   let total = 0
   async function read(resource: Resource, file?: string): Promise<Uint8Array> {
     const params = new URLSearchParams({ id, revision: String(revision), session, task, resource })
@@ -75,7 +75,7 @@ export async function fetchPreviewBundle(session: string, id: string, revision: 
     }
     if (!(texture.file in assets)) assets[texture.file] = await read('asset', texture.file)
   }
-  const statusParams = new URLSearchParams(endpoint === '/api/experiment-demo' ? { resource: 'status' } : { resource: 'status', session })
+  const statusParams = new URLSearchParams(endpoint === 'api/experiment-demo' ? { resource: 'status' } : { resource: 'status', session })
   const response = await fetch(`${endpoint}?${statusParams}`, { signal, credentials: 'same-origin', cache: 'no-store' })
   if (!response.ok) throw new Error('Preview status unavailable')
   const status: unknown = await response.json()

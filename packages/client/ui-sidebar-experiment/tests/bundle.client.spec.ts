@@ -38,15 +38,15 @@ describe('bounded checked preview resources', () => {
 
   it('loads demo resources and rewrites their internal demo addresses', async () => {
     const calls: URL[] = []
-    const demoContent = (value: string) => value.replaceAll('/api/experiment-preview', '/api/experiment-demo').replaceAll('session-one', 'demo')
+    const demoContent = (value: string) => value.replaceAll('api/experiment-preview', 'api/experiment-demo').replaceAll('session-one', 'demo')
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = new URL(requestUrl(input), 'https://example.test')
       calls.push(url)
       const resource = url.searchParams.get('resource')!
       return resource === 'status' ? Response.json({ status: 'ready', ...identity }) : new Response(demoContent(contents[resource]!))
     })
-    const bundle = await fetchPreviewBundle('demo', identity.id, identity.revision, identity.task, new AbortController().signal, '/api/experiment-demo')
-    const document = createPreviewDocument(bundle, 'demo', identity.id, identity.revision, identity.task, '/api/experiment-demo')
+    const bundle = await fetchPreviewBundle('demo', identity.id, identity.revision, identity.task, new AbortController().signal, 'api/experiment-demo')
+    const document = createPreviewDocument(bundle, 'demo', identity.id, identity.revision, identity.task, 'api/experiment-demo')
     expect(document).toContain("script-src 'unsafe-inline' blob:")
     expect(calls.every(url => url.pathname === '/api/experiment-demo')).toBe(true)
     expect(calls.filter(url => url.searchParams.get('resource') !== 'status').every(url => url.searchParams.get('session') === 'demo')).toBe(true)

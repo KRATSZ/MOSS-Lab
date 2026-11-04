@@ -27,8 +27,8 @@ function replaceRequired(source: string, target: string, replacement: string): s
  * @param endpoint - Preview or demonstration resource endpoint.
  * @returns HTML for the isolated preview.
  */
-export function createPreviewDocument(bundle: PreviewBundle, session: string, id: string, revision: number, task: string, endpoint: '/api/experiment-preview' | '/api/experiment-demo' = '/api/experiment-preview'): string {
-  const url = (resource: string) => `${endpoint}?${new URLSearchParams({ id, revision: String(revision), session, task, resource })}`
+export function createPreviewDocument(bundle: PreviewBundle, session: string, id: string, revision: number, task: string, endpoint: 'api/experiment-preview' | 'api/experiment-demo' = 'api/experiment-preview'): string {
+  const url = (resource: string) => `/${endpoint}?${new URLSearchParams({ id, revision: String(revision), session, task, resource })}`
   let viewer = text(bundle.viewer)
   let script = text(bundle.script)
   viewer = replaceRequired(viewer, url('three'), '__PREVIEW_THREE__')
