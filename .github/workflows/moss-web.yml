@@ -32,6 +32,16 @@ jobs:
         run: pnpm run build
       - name: Test experiment storage and preview resources
         run: node --import tsx/esm --test internal/experiment/tests/workflow.test.mjs internal/experiment/tests/preview-resources.test.mjs
+      - name: Test plugin lock, recovery and download resources
+        run: node --import tsx/esm --test internal/experiment/tests/plugin-runtime.test.mjs internal/experiment/tests/preview-recovery.test.mjs
+      - uses: astral-sh/setup-uv@v6
+      - name: Build the Linux confinement launcher
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq musl-tools
+          pnpm --dir native/system run build:native
+      - name: Check the pinned plugin through public MCP
+        run: node --import tsx/esm scripts/check-labscriptai.mjs
       - name: Test client and workflow integration
         run: >-
           pnpm exec vitest run

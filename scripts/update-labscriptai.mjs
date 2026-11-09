@@ -32,7 +32,7 @@ export async function findPluginUpdate(current, fetcher = fetch) {
   if (manifestAsset?.browser_download_url !== prefix + 'release-manifest.json') throw new Error('Release has no trusted checksum manifest')
   const manifest = await get(manifestAsset.browser_download_url)
   if (manifest.version !== version) throw new Error('Release manifest version mismatch')
-  if (manifest.artifact_api !== current.artifact_api) return { status: 'unsupported_api' }
+  if (manifest.artifact_api !== current.artifact_api) return { status: 'unsupported_api', version, artifact_api: manifest.artifact_api ?? null, expected_artifact_api: current.artifact_api }
   const name = `labscriptai-ot-${version}.zip`
   const asset = manifest.assets?.find(item => item.name === name)
   const url = prefix + name
@@ -49,5 +49,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     await rename(path + '.tmp', path)
   }
   if (process.env.GITHUB_OUTPUT) await writeFile(process.env.GITHUB_OUTPUT, `changed=${result.status === 'updated'}\n`, { flag: 'a' })
-  console.log(JSON.stringify({ status: result.status, version: result.lock?.version }))
+  const { lock, ...decision } = result
+  console.log(JSON.stringify(lock ? { ...decision, version: lock.version } : decision))
 }

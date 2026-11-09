@@ -83,7 +83,7 @@ node moss-start.mjs
 
 MOSS 调用 `simulate_protocol` 和 `protocol_artifacts`（产物接口 v1）。插件提供独立的动画与配置图 HTML；MOSS 校验摘要，并仅向当前已认证的会话、实验版本及分析任务提供页面，插件还提供经过校验的文件清单，用于受认证的 PNG/CSV/JSON 下载；不保留插件源码副本。启动使用已提交的锁文件，不会临时选择变化中的 `latest` 版本。
 
-每日 `labscriptai-sync` 工作流检查正式发布，更新归档摘要锁，安装候选版本并测试两个公开工具，通过后才创建升级草稿 PR。审查合并锁文件后，下次启动采用新版本；运行中的进程保留当前版本。初始锁固定到明确的源码提交，等待兼容版本正式发布。开发插件时可将 `LABSCRIPTAI_OT_ROOT` 指向本地仓库，启动日志会标记 `development`。运行 `node --import tsx/esm scripts/check-labscriptai.mjs` 可检查锁定版本，无需模型或机器人。
+每日 `labscriptai-sync` 工作流检查正式发布，更新归档摘要锁，安装候选版本并测试两个公开工具，通过后才创建升级草稿 PR。审查合并锁文件后，下次启动采用新版本；运行中的进程保留当前版本。初始锁固定到已发布的 v0.1.3 ZIP。遇到不兼容的产物接口版本，工作流会记录原因并跳过。上游仓库须允许 GitHub Actions 创建 PR，维护者可在合并前批准机器人 PR 的 CI。开发插件时可将 `LABSCRIPTAI_OT_ROOT` 指向本地仓库，启动日志会标记 `development`。运行 `node --import tsx/esm scripts/check-labscriptai.mjs` 可检查锁定版本，无需模型或机器人。
 
 ## 环境变量配置
 

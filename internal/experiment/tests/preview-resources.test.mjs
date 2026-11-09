@@ -34,6 +34,9 @@ test('serves only a published preview whose latest check and revision still matc
   assert.equal(download.status, 200)
   assert.equal(download.headers.get('content-disposition'), 'attachment; filename="wells.csv"')
   assert.equal(await download.text(), 'well,volume\nA1,20\n')
+  const fileFor = (session, task) => new Request(`http://localhost/api/experiment-preview?id=exp&revision=1&session=${session}&task=${task}&resource=file&file=wells.csv`)
+  assert.equal((await resources.fetch(fileFor('other', 'task'))).status, 404)
+  assert.equal((await resources.fetch(fileFor('session', 'old'))).status, 409)
   assert.equal((await resources.fetch(req('file&file=..%2Fsecret'))).status, 404)
   checks = [...checks, { ...checks[0], status: 'running', taskId: 'new' }]
   assert.equal((await resources.fetch(req('animation'))).status, 409)

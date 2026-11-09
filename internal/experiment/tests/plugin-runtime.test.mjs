@@ -35,6 +35,9 @@ test('pinned installation verifies checksums, installs once, and retains existin
   await writeFile(join(directory, 'labscriptai-ot.lock.json'), JSON.stringify(lock('b'.repeat(64))))
   await assert.rejects(ensurePluginRuntime(directory, options), /checksum mismatch/)
   assert.equal(await readFile(join(runtime.root, 'servers/opentrons-mcp/index.js'), 'utf8'), '// fixture')
+  await writeFile(join(directory, 'labscriptai-ot.lock.json'), JSON.stringify(pinned))
+  const rollback = await ensurePluginRuntime(directory, { ...options, fetcher: async () => assert.fail('old archive must remain cached') })
+  assert.equal(rollback.root, runtime.root)
   assert.ok(!(await readdir(join(directory, '.dsh-local/plugins'))).some(name => name.startsWith('install-')))
 })
 
@@ -81,7 +84,9 @@ test('updates promote a source pin to its published release, without downgrades 
   assert.equal(promoted.lock.kind, 'release')
   assert.equal(promoted.lock.sha256, 'c'.repeat(64))
   assert.equal((await findPluginUpdate(current, provider(release('0.1.2')))).status, 'current')
-  assert.equal((await findPluginUpdate(current, provider(release('0.2.0'), 2))).status, 'unsupported_api')
+  assert.deepEqual(await findPluginUpdate(current, provider(release('0.2.0'), 2)), {
+    status: 'unsupported_api', version: '0.2.0', artifact_api: 2, expected_artifact_api: 1,
+  })
   assert.equal((await findPluginUpdate(current, provider({ ...release('0.2.0'), prerelease: true }))).status, 'current')
   const broken = release('0.1.4')
   broken.assets[0].browser_download_url = 'https://example.test/manifest.json'
