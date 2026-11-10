@@ -59,14 +59,15 @@ graph TD
 - An OpenAI Chat Completions-compatible HTTPS model service and credentials.
 - A Xiaozhi MCP WSS endpoint for hardware delegation; an Opentrons HTTP endpoint is optional.
 
+<a id="run"></a> <a id="run-from-source"></a>
+
 ## Getting Started
 
-From the repository root, install Node and Python dependencies and build the web bundle:
+From the repository root, install Node dependencies and build the web bundle. The launcher installs the locked external plugin and its dependencies:
 
 ```sh
 pnpm install
 pnpm run build
-uv sync --project labscriptai-ot --locked
 ```
 
 Copy `.env.example` to `.env` and fill in your service credentials. Keep `.env` strictly local:
@@ -77,6 +78,12 @@ node moss-start.mjs
 ```
 
 Open the authenticated session URL printed in the terminal. Workspace sessions, experiment state, and compiled scenes are kept in `.dsh-local/`. Detailed migration guides can be found in [MOSS Lab setup](MOSS-LAB.md).
+
+## Plugin updates
+
+MOSS calls `simulate_protocol` and `protocol_artifacts` (artifact API v1). The plugin supplies portable animation and setup HTML; MOSS checks their digests and serves them only for the current authenticated session, revision, and analysis task. The plugin also supplies a checked file manifest for authenticated PNG/CSV/JSON downloads. It keeps no plugin source copy. Startup uses the committed lock and never selects a moving `latest` version.
+
+The daily `labscriptai-sync` workflow checks published releases, updates the checksum lock, installs the candidate, and exercises both public tools before opening a draft upgrade PR. Merging the reviewed lock changes the next startup; running processes keep their current version. The initial lock pins the published v0.1.3 ZIP. The workflow logs and skips incompatible artifact API versions. To open draft PRs, the upstream repository must allow GitHub Actions to create pull requests. A maintainer can approve CI on the bot-created PR before merging. For plugin development, set `LABSCRIPTAI_OT_ROOT` to a local checkout; the startup log marks it `development`. Run `node --import tsx/esm scripts/check-labscriptai.mjs` to check the locked runtime without a model or robot.
 
 ## Configuration
 
@@ -94,19 +101,19 @@ The runtime reads its configuration from the root `.env` file:
 
 - `moss-start.mjs` and `moss-model.patch.yml` configure and launch the Cordis web agent.
 - `internal/` houses the experiment store, preview recovery engine, robot telemetry, and Xiaozhi bridge.
-- `labscriptai-ot/` contains protocol automation skills, simulation runtime, and Flex3D MuJoCo assets.
+- `labscriptai-ot.lock.json` pins the external plugin archive, artifact API, version, and SHA-256; managed installs live in `.dsh-local/plugins/`.
 - `packages/`, `apps/`, and `vendor/` provide the core DeepSeek Harness architecture and web client.
 
 ## Sources and Citation
 
-MOSS Lab builds on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) by DeepSeek AI and [LabscriptAI OT](https://github.com/KRATSZ/labscriptai-ot). The included LabscriptAI OT snapshot is based on commit `a3182eb5befc8ce535c33a225ae80b287e87c211`, with custom Flex3D web viewer adaptations.
+MOSS Lab builds on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) by DeepSeek AI and [LabscriptAI OT](https://github.com/KRATSZ/labscriptai-ot). MOSS calls its public MCP tools; simulation, animation, setup figures, fonts, and rendering code stay in the plugin repository.
 
 Any research, publication, or public system utilizing LabscriptAI OT must cite:
 
 > Gao, Yuan et al. “Autonomous Liquid-handling Robotics Scripting for Accessible and Responsible Protein Engineering.” bioRxiv, 2025. [doi:10.1101/2025.09.30.679666](https://doi.org/10.1101/2025.09.30.679666).
 
-Refer to [LabscriptAI OT citation metadata](labscriptai-ot/CITATION.cff) and [DeepSeek Harness citation](https://github.com/deepseek-ai/deepseek-harness#citation).
+Refer to [LabscriptAI OT citation metadata](https://github.com/KRATSZ/labscriptai-ot/blob/main/CITATION.cff) and [DeepSeek Harness citation](https://github.com/deepseek-ai/deepseek-harness#citation).
 
 ## License
 
-This repository is distributed under a mixed-licensing model. DeepSeek Harness components are covered by the [MIT license](LICENSE). The `labscriptai-ot/` subsystem is licensed under the [LabscriptAI Research Citation License v1.0](labscriptai-ot/LICENSE), which requires academic citation and prior written authorization for commercial deployment; it is not an OSI-approved open-source license. Third-party protocol examples within the library retain their respective author copyrights. See [third-party notices](THIRD_PARTY_NOTICES.md) for full attribution details.
+This repository is distributed under a mixed-licensing model. DeepSeek Harness components are covered by the [MIT license](LICENSE). The separately installed LabscriptAI OT plugin is licensed under the [LabscriptAI Research Citation License v1.0](https://github.com/KRATSZ/labscriptai-ot/blob/main/LICENSE), which requires academic citation and prior written authorization for commercial deployment; it is not an OSI-approved open-source license. Third-party protocol examples within the library retain their respective author copyrights. See [third-party notices](THIRD_PARTY_NOTICES.md) for full attribution details.

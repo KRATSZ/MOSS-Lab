@@ -64,3 +64,7 @@
   flex: none;
   color: var(--dsw-alias-label-secondary);
 }
+
+.downloads { position: relative; font-size: 12px; }
+.downloads summary { cursor: pointer; padding: 4px 8px; }
+.downloads a { display: block; padding: 6px 8px; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }

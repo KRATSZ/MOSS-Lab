@@ -1,11 +1,8 @@
 import { createHash } from 'node:crypto'
-import { spawn } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
 import { ExperimentError } from './index.mjs'
 
-const sceneBuilder = join(dirname(fileURLToPath(import.meta.url)), 'build_scene.py')
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
 const MAX_ANALYSIS_BYTES = 16 * 1024 * 1024
 
@@ -15,12 +12,11 @@ const MAX_ANALYSIS_BYTES = 16 * 1024 * 1024
  * result.analysisSha256; arbitrary caller-supplied check results are not trusted.
  * The caller owns the returned directory and must remove it when finished.
  */
-export async function buildPreview({ store, id, revision, sessionId, analysis, python, flexRoot, temporaryRoot, timeoutMs }) {
+export async function buildPreview({ store, id, revision, sessionId, analysis, runtime, temporaryRoot }) {
   if (typeof sessionId !== 'string' || sessionId.length === 0) throw new ExperimentError('INVALID_INPUT', 'a session id is required')
   if (!Buffer.isBuffer(analysis) || analysis.length === 0 || analysis.length > MAX_ANALYSIS_BYTES) {
     throw new ExperimentError('INVALID_INPUT', 'analysis must be a bounded nonempty byte buffer')
   }
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new ExperimentError('INVALID_INPUT', 'a positive scene timeout is required')
   const capturedAnalysis = Buffer.from(analysis)
   const digest = sha256(capturedAnalysis)
   const verify = () => {
@@ -36,34 +32,15 @@ export async function buildPreview({ store, id, revision, sessionId, analysis, p
   const taskId = verify()
   const directory = await mkdtemp(join(resolve(temporaryRoot), 'flex-preview-'))
   try {
-    const input = join(directory, 'analysis.json')
-    await writeFile(input, capturedAnalysis, { mode: 0o600, flag: 'wx' })
-    await runScene({ python, flexRoot, input, directory, timeoutMs })
+    const documents = await runtime.documents(capturedAnalysis)
+    if (!documents.animation && !documents.setup) throw new ExperimentError('PREVIEW_FAILED', 'plugin returned no usable documents')
+    for (const name of ['animation', 'setup']) if (documents[name]) await writeFile(join(directory, `${name}.html`), documents[name], { mode: 0o600, flag: 'wx' })
+    await mkdir(join(directory, 'downloads'))
+    for (const file of documents.files) await writeFile(join(directory, 'downloads', file.name), file.bytes, { mode: 0o600, flag: 'wx' })
     if (verify() !== taskId) throw new ExperimentError('STALE_TASK', 'protocol analysis changed while building the preview')
-    const info = JSON.parse(await readFile(join(directory, 'info.json'), 'utf8'))
-    const view = JSON.parse(await readFile(join(directory, 'view.json'), 'utf8'))
-    if (!Array.isArray(info.steps) || !Array.isArray(view.frames) || view.frames.length === 0) throw new ExperimentError('INVALID_PREVIEW', 'scene generator returned incomplete data')
-    return { id, revision, sessionId, taskId, analysisSha256: digest, directory }
+    return { id, revision, sessionId, taskId, analysisSha256: digest, directory, documents: { animation: !!documents.animation, setup: !!documents.setup }, files: documents.files.map(({ name, mime }) => ({ name, mime })) }
   } catch (error) {
     await rm(directory, { recursive: true, force: true })
     throw error
   }
-}
-
-function runScene({ python, flexRoot, input, directory, timeoutMs }) {
-  return new Promise((resolvePromise, reject) => {
-    const env = { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: directory, TMPDIR: directory, FLEX3D_EXPORT: directory, PYTHONNOUSERSITE: '1' }
-    const child = spawn(python, ['-I', sceneBuilder, resolve(flexRoot), input, directory], { cwd: directory, env, stdio: ['ignore', 'ignore', 'pipe'] })
-    let stderr = ''
-    let timedOut = false
-    child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-8192) })
-    const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL') }, timeoutMs)
-    child.once('error', error => { clearTimeout(timer); reject(error) })
-    child.once('close', code => {
-      clearTimeout(timer)
-      if (timedOut) reject(new ExperimentError('PREVIEW_TIMEOUT', 'scene generation timed out'))
-      else if (code !== 0) reject(new ExperimentError('PREVIEW_FAILED', 'scene generation failed', { diagnostic: stderr }))
-      else resolvePromise()
-    })
-  })
 }

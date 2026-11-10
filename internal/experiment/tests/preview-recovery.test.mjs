@@ -8,7 +8,7 @@ import { Context } from '../../../vendor/cordis/src/index.ts'
 import { ExperimentStore } from '../index.mjs'
 import * as previewPlugin from '../preview-plugin.mjs'
 
-const lab = resolve(import.meta.dirname, '../../../labscriptai-ot')
+const runtime = { documents: async () => ({ animation: Buffer.from('<html>animation</html>'), setup: Buffer.from('<html>setup</html>'), files: [] }) }
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
 const analysisFixture = () => Buffer.from(JSON.stringify({ robotType: 'OT-3 Standard', metadata: { protocolName: 'recovery' }, commands: [{ id: 'home', commandType: 'home', params: {}, status: 'succeeded' }] }))
 
@@ -21,6 +21,7 @@ test('status polling rebuilds a preview from the analysis persisted with its pas
   const ctx = new Context()
   let route
   ctx.provide('experimentStore', store)
+  ctx.provide('labscriptaiRuntime', runtime)
   ctx.provide('connection', { fetch: { register(value) { route = value; return () => {} } } })
   const seed = (sessionId, creationKey, analysis, sha256) => {
     const { experiment } = store.createForSession(sessionId, { creationKey, snapshot: { protocol: 'print(1)' } })
@@ -34,7 +35,7 @@ test('status polling rebuilds a preview from the analysis persisted with its pas
   const lateTask = store.startCheck({ id: late.id, revision: 1, protocolHash: late.protocolHash, name: 'protocol-analysis' })
   // s2's stored digest does not match its stored bytes, so the persisted result is untrusted.
   seed('s2', 'one', analysis, sha256(Buffer.from('tampered')))
-  const plugin = ctx.plugin(previewPlugin, { flexRoot: join(lab, 'automation/flex3d'), python: join(lab, '.venv/bin/python'), temporaryRoot: dir, timeoutMs: 60000 })
+  const plugin = ctx.plugin(previewPlugin, { temporaryRoot: dir, timeoutMs: 60000 })
   const status = async session => (await route.fetch(new Request(`http://localhost/api/experiment-preview?resource=status&session=${session}`))).json()
   try {
     await plugin.await()
@@ -67,6 +68,7 @@ test('sessions without a recoverable latest experiment keep waiting', { timeout:
   const ctx = new Context()
   let route
   ctx.provide('experimentStore', store)
+  ctx.provide('labscriptaiRuntime', runtime)
   ctx.provide('connection', { fetch: { register(value) { route = value; return () => {} } } })
   // No experiment at all; an experiment whose analysis never passed; a legacy passed check without persisted bytes.
   const { experiment: failed } = store.createForSession('s1', { creationKey: 'one', snapshot: { protocol: 'print(1)' } })
@@ -75,7 +77,7 @@ test('sessions without a recoverable latest experiment keep waiting', { timeout:
   const { experiment: legacy } = store.createForSession('s2', { creationKey: 'one', snapshot: { protocol: 'print(1)' } })
   const legacyTask = store.startCheck({ id: legacy.id, revision: 1, protocolHash: legacy.protocolHash, name: 'protocol-analysis' })
   store.finishCheck({ ...legacyTask, status: 'passed', result: { analysisSha256: sha256(analysisFixture()) } })
-  const plugin = ctx.plugin(previewPlugin, { flexRoot: join(lab, 'automation/flex3d'), python: join(lab, '.venv/bin/python'), temporaryRoot: dir, timeoutMs: 60000 })
+  const plugin = ctx.plugin(previewPlugin, { temporaryRoot: dir, timeoutMs: 60000 })
   const status = async session => (await route.fetch(new Request(`http://localhost/api/experiment-preview?resource=status&session=${session}`))).json()
   try {
     await plugin.await()

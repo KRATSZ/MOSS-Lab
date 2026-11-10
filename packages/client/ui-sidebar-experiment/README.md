@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The current session opens **Experiment animation** automatically when a checked preview becomes available and starts playback. Open it from the right sidebar guide or select **View demo** to explore clearly marked demo data.
+The current session opens **Experiment animation** automatically when a checked preview becomes available. Open it from the right sidebar guide or select **View demo** to explore clearly marked demo data.
 
 ## Table of Contents
 
@@ -24,6 +24,8 @@ The current session opens **Experiment animation** automatically when a checked 
 ## Implementation
 
 The client watches the current session's same-origin preview status every five seconds, opens each new checked task once, and checks again when the user selects **Check again**. Demo mode uses `/api/experiment-demo` and the fixed session `demo`; real experiments use `/api/experiment-preview`. Both fetch bounded resources for the selected revision and task and render them in a sandboxed frame after rechecking the status. **Check robot status** makes one separate read-only request and displays the available device information and query time.
+
+The **Animation** and **Setup image** buttons select self-contained plugin documents. MOSS preserves their HTML bytes: animation runs in an opaque sandbox with scripts; the setup page runs without scripts or origin access. The host **Download** menu serves the plugin’s PNG/CSV/JSON files through authenticated routes. Missing setup data shows a retry message while animation remains usable.
 
 <a id="model-experience"></a>
 ## Model Experience

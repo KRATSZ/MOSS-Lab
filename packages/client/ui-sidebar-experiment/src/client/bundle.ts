@@ -1,37 +1,30 @@
 /** A bounded set of resources belonging to one checked experiment revision. */
 export interface PreviewBundle {
-  readonly viewer: Uint8Array
-  readonly script: Uint8Array
-  readonly orbit: Uint8Array
-  readonly three: Uint8Array
-  readonly info: Uint8Array
-  readonly analysis: Uint8Array
-  readonly view: Uint8Array
-  readonly assets: Readonly<Record<string, Uint8Array>>
+  readonly document: string | null
+  readonly setupDocument: string | null
+  readonly files: readonly string[]
 }
 
-const MAX_FILE = 32 * 1024 * 1024
-const MAX_TOTAL = 64 * 1024 * 1024
-const MAX_TEXTURES = 64
+const MAX_FILE = 64 * 1024 * 1024
+const MAX_TOTAL = 128 * 1024 * 1024
 
-type Resource = 'viewer' | 'script' | 'orbit' | 'three' | 'info' | 'analysis' | 'view' | 'asset'
+type Resource = 'animation' | 'setup'
 
-/**
- * Fetch bounded preview resources and verify that the revision remains current.
- * @param session - Owning session identifier.
- * @param id - Experiment identifier.
- * @param revision - Experiment revision.
- * @param task - Task identifier.
- * @param signal - Cancels resource requests.
- * @param endpoint - Preview or demonstration resource endpoint.
- * @returns Resources for the checked revision.
+/** Fetch portable plugin documents, keeping partial availability and verifying the revision again.
+ * @param session Owning session.
+ * @param id Experiment identifier.
+ * @param revision Checked revision.
+ * @param task Analysis task identifier.
+ * @param signal Cancellation signal.
+ * @param endpoint Authenticated preview or demo endpoint; omitted selects the preview.
+ * @returns Bounded documents from one current check, without rewriting their content.
  */
 export async function fetchPreviewBundle(session: string, id: string, revision: number, task: string, signal: AbortSignal, endpoint: 'api/experiment-preview' | 'api/experiment-demo' = 'api/experiment-preview'): Promise<PreviewBundle> {
   let total = 0
-  async function read(resource: Resource, file?: string): Promise<Uint8Array> {
+  async function read(resource: Resource): Promise<string | null> {
     const params = new URLSearchParams({ id, revision: String(revision), session, task, resource })
-    if (file !== undefined) params.set('file', file)
     const response = await fetch(`${endpoint}?${params}`, { signal, credentials: 'same-origin', cache: 'no-store' })
+    if (response.status === 404 || response.status === 503) return null
     if (!response.ok || response.body === null) throw new Error('Preview resource unavailable')
     const reader = response.body.getReader()
     const chunks: Uint8Array[] = []
@@ -54,27 +47,11 @@ export async function fetchPreviewBundle(session: string, id: string, revision: 
     const result = new Uint8Array(length)
     let offset = 0
     for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.byteLength }
-    return result
+    return new TextDecoder('utf-8', { fatal: true }).decode(result)
   }
-  const viewer = await read('viewer')
-  const script = await read('script')
-  const orbit = await read('orbit')
-  const three = await read('three')
-  const info = await read('info')
-  const analysis = await read('analysis')
-  const view = await read('view')
-  const parsed: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(view))
-  if (typeof parsed !== 'object' || parsed === null || !('textures' in parsed) || !Array.isArray(parsed.textures)
-    || parsed.textures.length > MAX_TEXTURES) throw new Error('Invalid preview textures')
-  const assets = Object.create(null) as Record<string, Uint8Array>
-  const textures: readonly unknown[] = parsed.textures
-  for (const texture of textures) {
-    if (typeof texture !== 'object' || texture === null || !('file' in texture) || typeof texture.file !== 'string'
-      || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.png$/.test(texture.file) || texture.file === '.' || texture.file === '..') {
-      throw new Error('Invalid texture filename')
-    }
-    if (!(texture.file in assets)) assets[texture.file] = await read('asset', texture.file)
-  }
+  const document = await read('animation')
+  const setupDocument = await read('setup')
+  if (document === null && setupDocument === null) throw new Error('Preview documents unavailable')
   const statusParams = new URLSearchParams(endpoint === 'api/experiment-demo' ? { resource: 'status' } : { resource: 'status', session })
   const response = await fetch(`${endpoint}?${statusParams}`, { signal, credentials: 'same-origin', cache: 'no-store' })
   if (!response.ok) throw new Error('Preview status unavailable')
@@ -84,5 +61,13 @@ export async function fetchPreviewBundle(session: string, id: string, revision: 
     || !('task' in status) || status.task !== task) {
     throw new Error('Experiment changed during preview load')
   }
-  return { viewer, script, orbit, three, info, analysis, view, assets }
+  const entries: unknown = 'files' in status ? status.files : []
+  if (!Array.isArray(entries) || entries.length > 64) throw new Error('Invalid preview files')
+  const files: string[] = []
+  const boundedEntries: readonly unknown[] = entries
+  for (const entry of boundedEntries) {
+    if (typeof entry !== 'object' || entry === null || !('name' in entry) || typeof entry.name !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(entry.name)) throw new Error('Invalid preview filename')
+    files.push(entry.name)
+  }
+  return { document, setupDocument, files }
 }

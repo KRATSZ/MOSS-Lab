@@ -1,0 +1,90 @@
+name: Sync LabscriptAI plugin
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: labscriptai-sync
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      lock: ${{ steps.verified.outputs.lock }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v5.0.0
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: sync
+        run: node scripts/update-labscriptai.mjs
+      - uses: astral-sh/setup-uv@v6
+        if: steps.sync.outputs.changed == 'true'
+      - name: Build the Linux confinement launcher
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq musl-tools
+          pnpm --dir native/system run build:native
+      - name: Check the proposed plugin through public MCP
+        if: steps.sync.outputs.changed == 'true'
+        run: node --import tsx/esm scripts/check-labscriptai.mjs
+      - name: Export the verified lock
+        id: verified
+        if: steps.sync.outputs.changed == 'true'
+        run: node --input-type=module -e 'import fs from "node:fs"; fs.appendFileSync(process.env.GITHUB_OUTPUT, "lock=" + JSON.stringify(JSON.parse(fs.readFileSync("labscriptai-ot.lock.json", "utf8"))) + "\n")'
+  propose:
+    needs: validate
+    if: github.repository == 'SmartisanNaive/MOSS-Lab' && github.ref == 'refs/heads/main' && needs.validate.outputs.lock != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Apply the verified lock
+        env:
+          CANDIDATE_LOCK: ${{ needs.validate.outputs.lock }}
+        run: node --input-type=module -e 'import fs from "node:fs"; fs.writeFileSync("labscriptai-ot.lock.json", JSON.stringify(JSON.parse(process.env.CANDIDATE_LOCK), null, 2) + "\n")'
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: codex/sync-labscriptai
+          title: 'chore: update pinned LabscriptAI plugin'
+          commit-message: 'chore: update pinned LabscriptAI plugin'
+          draft: true
+          add-paths: labscriptai-ot.lock.json
+          body: |
+            ## Motivation
+            保持外部插件同步，避免复制源码。Refs #13。
+            ## Changes
+            **Interface changes:** None.
+            **Behavior changes:** 更新版本与归档 SHA-256；现有实验进程继续使用原版本。
+            ## Testing
+            **Test design:** 固定候选版本必须仍能分析协议、生成动画与配置图，并列出可下载文件。
+            **Test entries:** `node --import tsx/esm scripts/check-labscriptai.mjs` 已在本次工作流通过；失败时不创建 PR。
+            <details><summary>Proof</summary>
+            [本次兼容检查日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            </details>
+            ## AI Usage
+            <!-- ai-declaration:start -->
+            [![AI-DECLARATION: hint](https://img.shields.io/badge/䷼%20AI--DECLARATION-hint-ecfccb?labelColor=ecfccb)](https://ai-declaration.md)
+            **AI declaration** ([v0.1.2](https://ai-declaration.md/en/0.1.2)): `hint`
+            <!-- ai-declaration:end -->
+            | 阶段 | 级别 | AI 参与度 | 决策记录 |
+            |:--|:--|--:|:--|
+            | breakdown 问题拆解 | hint 人工独立 | 0% | 既定依赖更新工作流。 |
+            | design 方案设计 | hint 人工独立 | 0% | 使用已审查的版本规则。 |
+            | testing 验收测试 | hint 人工独立 | 0% | 固定兼容检查脚本执行。 |
+            | implementation 技术实现 | hint 人工独立 | 0% | 脚本更新锁文件，未调用模型。 |
+            | review 评审处理 | n/a 暂不适用 | — | 尚未处理评审意见。 |

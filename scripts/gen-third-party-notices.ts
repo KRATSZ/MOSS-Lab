@@ -793,6 +793,10 @@ This file lists **direct** dependencies declared by the workspace, the explicitl
 
 The complete npm transitive closure, including the Landlock launcher workspace, is recorded with exact pinned versions in [\`pnpm-lock.yaml\`](pnpm-lock.yaml) — inspect it with \`pnpm licenses list\`. The Python SDK closure is recorded separately in [\`python/sdk/uv.lock\`](python/sdk/uv.lock).
 
+## External laboratory plugin
+
+[LabscriptAI OT](https://github.com/KRATSZ/labscriptai-ot) is separately installed using the version and archive SHA-256 in [labscriptai-ot.lock.json](labscriptai-ot.lock.json). Its source and assets are not part of the MOSS source tree. It retains the [LabscriptAI Research Citation License v1.0](https://github.com/KRATSZ/labscriptai-ot/blob/main/LICENSE); commercial use requires written permission. Public use must cite Gao, Yuan et al., “Autonomous Liquid-handling Robotics Scripting for Accessible and Responsible Protein Engineering,” bioRxiv, 2025, [DOI: 10.1101/2025.09.30.679666](https://doi.org/10.1101/2025.09.30.679666).
+
 ## Vendored source (\`vendor/\`)
 
 The Cordis framework and its foundation libraries are source-vendored into this repository rather than consumed from npm, and republished under the \`@deepseek-ai\` scope. All are MIT-licensed; each directory preserves its upstream \`LICENSE\` file. Exact upstream commits and local modifications are recorded in [\`vendor/README.md\`](vendor/README.md).
