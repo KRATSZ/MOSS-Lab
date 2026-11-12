@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: moss-web-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   DSH_TELEMETRY_DISABLED: '1'
 
@@ -26,20 +30,34 @@ jobs:
         with:
           node-version: '24'
           cache: pnpm
+      - name: Install Linux confinement toolchain
+        run: |
+          stat -Lc '%a %U %G %n' /etc/resolv.conf
+          for account in runner _apt; do
+            if sudo -u "$account" timeout 15 getent ahostsv4 archive.ubuntu.com; then
+              printf 'Ubuntu DNS resolves for %s\n' "$account"
+            else
+              printf 'Ubuntu DNS lookup failed for %s\n' "$account"
+            fi
+          done
+          printf '%s\n' 'https://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt
+          sudo apt-get update -q -o APT::Update::Error-Mode=any -o Acquire::Retries=0
+          sudo apt-get install -yq musl-tools
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build web and check types
         run: pnpm run build
+      - name: Test approval policy
+        run: node --test .github/review-ownership/check-approval.test.mjs
       - name: Test experiment storage and preview resources
-        run: node --import tsx/esm --test internal/experiment/tests/workflow.test.mjs internal/experiment/tests/preview-resources.test.mjs
+        run: node --import tsx/esm --test internal/experiment/tests/workflow.test.mjs internal/experiment/tests/agent-tools.test.mjs internal/experiment/tests/preview-resources.test.mjs internal/xiaozhi/bridge.test.mjs internal/xiaozhi/delegation.test.mjs
       - name: Test plugin lock, recovery and download resources
         run: node --import tsx/esm --test internal/experiment/tests/plugin-runtime.test.mjs internal/experiment/tests/preview-recovery.test.mjs
       - uses: astral-sh/setup-uv@v6
+        with:
+          cache-dependency-glob: labscriptai-ot.lock.json
       - name: Build the Linux confinement launcher
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -yq musl-tools
-          pnpm --dir native/system run build:native
+        run: pnpm --dir native/system run build:native
       - name: Check the pinned plugin through public MCP
         run: node --import tsx/esm scripts/check-labscriptai.mjs
       - name: Test client and workflow integration
@@ -48,5 +66,6 @@ jobs:
           packages/client/ui-sidebar-experiment/tests/bundle.client.spec.ts
           packages/client/ui-sidebar-experiment/tests/experiment.client.spec.tsx
           packages/test-support/client-runtime/tests/assembly-test-client.client.spec.ts
+          scripts/build-exe-for-python-sdk-office.spec.ts
       - name: Test built web boot
         run: pnpm exec vitest run --config vitest.web.config.ts apps/web/tests/built-boot.expected.e2e.ts
