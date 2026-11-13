@@ -27,6 +27,8 @@ test('the public MCP adapter controls loopback Flex and OT-2 through a saved, ap
     await t.test(robotType, async t => {
       const serial = robotType === 'Flex' ? 'FLEX-1' : 'OT2-1'
       let state = 'idle'
+      let uploadKey
+      let dropCreateReply = false
       const mutations = []
       const server = createServer((request, response) => {
         const path = new URL(request.url, 'http://localhost').pathname
@@ -37,8 +39,20 @@ test('the public MCP adapter controls loopback Flex and OT-2 through a saved, ap
         if (request.headers.authorization !== credentials) return send({}, 401)
         if (request.method === 'POST') {
           mutations.push(path)
-          if (path === '/protocols') return send({ data: { id: 'protocol-1' } })
-          if (path === '/runs') return send({ data: { id: 'run-1' } })
+          if (path === '/protocols') {
+            const chunks = []
+            request.on('data', chunk => chunks.push(chunk))
+            request.on('end', () => {
+              uploadKey = Buffer.concat(chunks).toString().match(/name="key"\r\n\r\n([a-f0-9-]+)/)?.[1]
+              send({ data: { id: 'protocol-1' } })
+            })
+            return
+          }
+          if (path === '/runs') {
+            state = 'idle'
+            if (dropCreateReply) return request.socket.destroy()
+            return send({ data: { id: 'run-1' } })
+          }
           if (path === '/runs/run-1/actions') {
             const chunks = []
             request.on('data', chunk => chunks.push(chunk))
@@ -54,6 +68,8 @@ test('the public MCP adapter controls loopback Flex and OT-2 through a saved, ap
         if (path === '/robot/door/status') return send({ data: { status: 'closed' } })
         if (path === '/robot/control/estopStatus') return robotType === 'OT-2' ? send({}, 404) : send({ data: { status: 'disengaged' } })
         if (path === '/deck_configuration') return robotType === 'OT-2' ? send({}, 404) : send({ data: { cutoutFixtures: [] } })
+        if (path === '/protocols') return send({ data: [{ id: 'protocol-1', key: uploadKey }] })
+        if (path === '/runs') return send({ data: [{ id: 'run-1', protocolId: 'protocol-1' }] })
         if (path === '/runs/run-1') return send({ data: { id: 'run-1', status: state, labware: [] } })
         if (['/instruments', '/modules', '/labwareOffsets', '/runs/run-1/commands'].includes(path)) return send({ data: [] })
         return send({}, 404)
@@ -79,6 +95,15 @@ test('the public MCP adapter controls loopback Flex and OT-2 through a saved, ap
         assert.equal((await control.getRun(sessionId, result.id)).status, expected)
       }
       assert.equal(control.activeRun(sessionId), null)
+      if (robotType === 'OT-2') {
+        dropCreateReply = true
+        const unknown = await control.startRun({ sessionId, experimentId: experiment.id, revision: 1, approved: { ...robot, taskId: analysis.taskId } })
+        assert.equal(unknown.status, 'preparation_unconfirmed')
+        assert.equal(uploadKey, unknown.id)
+        assert.equal((await control.getRun(sessionId, unknown.id)).status, 'idle')
+        assert.equal((await control.controlRun({ sessionId, id: unknown.id, action: 'stop' })).status, 'action_acknowledged')
+        assert.equal((await control.getRun(sessionId, unknown.id)).status, 'stopped')
+      }
     })
   }
 })

@@ -63,7 +63,7 @@ export function createPluginClient(config) {
       await client.connect(transport, { signal, timeout: timeoutMs })
       if (client.getServerVersion()?.version !== config.version) throw new ExperimentError('PLUGIN_VERSION_MISMATCH', 'plugin version differs from the lock; rerun installation')
       const call = async (name, args) => {
-        const allowed = robot ? ['robot_status', 'query_history', 'run_protocol', 'preflight_run_setup', 'control_run'] : ['simulate_protocol', 'protocol_artifacts']
+        const allowed = robot ? ['robot_status', 'get_protocols', 'query_history', 'run_protocol', 'preflight_run_setup', 'control_run'] : ['simulate_protocol', 'protocol_artifacts']
         if (!allowed.includes(name)) throw new Error('MCP operation is not allowed')
         beforeDispatch?.()
         unsettled = true

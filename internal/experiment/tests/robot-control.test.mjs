@@ -20,7 +20,7 @@ function setup(t, model, allowLive = true) {
   const input = { experimentId: experiment.id, revision: 1, sessionId }
   const calls = []
   const tools = {}
-  const state = { approval: 'allowed-once', model, serial: 'robot-1', run: 'idle', dropPlay: false, onPrepare: () => {}, beforePlay: () => {} }
+  const state = { approval: 'allowed-once', model, serial: 'robot-1', run: 'idle', dropPlay: false, onPrepare: () => {}, beforePlay: () => {}, preparationLost: false }
   let control
   let intent = 0
   function mount(enabled = allowLive) {
@@ -41,14 +41,19 @@ function setup(t, model, allowLive = true) {
         beforeDispatch?.()
         calls.push({ name, args, source })
         if (name === 'robot_status') return { authoring_context: { robot_type: state.model }, health_summary: { robot_serial: state.serial } }
+        if (name === 'get_protocols') return { protocols: { data: state.preparationLost ? [{ id: 'protocol-1', key: state.key }] : [] } }
         if (name === 'run_protocol') {
           assert.equal(source, protocol)
           assert.equal(args.auto_play, false)
           assert.equal(args.expected_robot_type, model)
+          state.key = args.key
           state.onPrepare()
+          if (state.preparationLost) throw new Error('lost preparation acknowledgement')
           return { created_run: { data: { id: 'actual-run' } }, preflight_gate: { allowed_to_play: true } }
         }
-        if (name === 'query_history') return { status: state.run }
+        if (name === 'query_history') return args.scope === 'robot_runs'
+          ? { runs: { data: [{ id: 'actual-run', protocolId: 'protocol-1' }] } }
+          : { status: state.run }
         assert.equal(name, 'control_run')
         if (args.expected_run_status) assert.ok(args.expected_run_status.includes(state.run))
         state.run = { play: 'running', pause: 'paused', stop: 'stopped' }[args.action]
@@ -132,7 +137,7 @@ test('stop during preparation preserves ownership and stops the returned physica
     cancellation = f.control.controlRun({ sessionId: 'owner', id, action: 'stop' })
   }
   const run = await f.tools.start_robot_run.execute(f.input, f.exec)
-  assert.equal((await cancellation).status, 'cancellation_requested')
+  assert.ok(['cancellation_requested', 'action_acknowledged'].includes((await cancellation).status))
   assert.equal(run.status, 'stop_acknowledged')
   assert.equal(f.calls.filter(call => call.name === 'control_run')[0].args.action, 'stop')
   assert.equal((await f.control.getRun('owner', run.id)).status, 'stopped')
@@ -149,4 +154,18 @@ test('stop after the physical ID is saved invalidates a pending play dispatch', 
   assert.equal((await stopped).status, 'action_acknowledged')
   assert.notEqual(result.status, 'start_acknowledged')
   assert.deepEqual(f.calls.filter(call => call.name === 'control_run').map(call => call.args.action), ['stop'])
+})
+
+test('recovers the exact prepared run from its unique upload key after a lost preparation reply', async t => {
+  const f = setup(t, 'Flex')
+  f.state.preparationLost = true
+  const initial = await f.tools.start_robot_run.execute(f.input, f.exec)
+  assert.equal(initial.status, 'preparation_unconfirmed')
+  f.restart(true)
+  const recovered = await f.tools.get_robot_run.execute({}, f.exec)
+  assert.equal(recovered.runId, 'actual-run')
+  assert.equal(recovered.status, 'idle')
+  assert.equal((await f.tools.control_robot_run.execute({ id: initial.id, action: 'stop' }, f.exec)).status, 'action_acknowledged')
+  assert.equal((await f.tools.get_robot_run.execute({}, f.exec)).status, 'stopped')
+  assert.equal(f.control.activeRun('owner'), null)
 })

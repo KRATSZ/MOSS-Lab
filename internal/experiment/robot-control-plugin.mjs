@@ -62,8 +62,26 @@ export function apply(ctx, config) {
     return { expected_robot_type: row.robot_type, expected_robot_serial: row.robot_serial }
   }
 
+  async function reconcilePreparedRun(row) {
+    const robot = await status()
+    if (robot.serial !== row.robot_serial || robot.robotType !== row.robot_type) {
+      throw new ExperimentError('ROBOT_TARGET_CHANGED', 'The configured robot does not match this run receipt.')
+    }
+    const protocols = (await call('get_protocols', {})).protocols?.data
+    const protocolIds = new Set((Array.isArray(protocols) ? protocols : [])
+      .filter(protocol => protocol.key === row.id).map(protocol => protocol.id))
+    if (protocolIds.size === 0) return null
+    const runs = (await call('query_history', { scope: 'robot_runs' })).runs?.data
+    const candidates = (Array.isArray(runs) ? runs : []).filter(run => protocolIds.has(run.protocolId))
+    const candidate = candidates.length === 1 ? candidates[0].id : null
+    if (!identifier(candidate)) return null
+    store.recordRobotRun(row.session_id, row.id, candidate)
+    return candidate
+  }
+
   async function getRun(sessionId, id) {
-    const row = run(sessionId, id)
+    let row = run(sessionId, id)
+    if (row.active && !row.robot_run_id && await reconcilePreparedRun(row)) row = run(sessionId, id)
     if (!row.robot_run_id) return { id, status: row.active ? (row.cancel_requested ? 'cancellation_requested' : 'preparation_unconfirmed') : 'blocked', revision: row.revision }
     const info = await call('query_history', { scope: 'run_commands', run_id: row.robot_run_id, ...identity(row) })
     if (terminal.has(info.status)) store.finishRobotRun(sessionId, id)
@@ -107,7 +125,7 @@ export function apply(ctx, config) {
     let physicalId = null
     try {
       const result = await call('run_protocol', {
-        auto_play: false, return_after_prepare: true, ...identity(row),
+        key: id, auto_play: false, return_after_prepare: true, ...identity(row),
       }, experiment.snapshot.protocol, beforePrepare)
       physicalId = result.created_run?.data?.id ?? result.created_run?.id
       if (!identifier(physicalId)) throw new ExperimentError('ROBOT_PREPARATION_INVALID', 'OT did not return a usable run ID.')
@@ -151,7 +169,11 @@ export function apply(ctx, config) {
     if (action === 'stop') {
       store.requestRobotStop(sessionId, id)
       row = run(sessionId, id)
-      if (row.active && !row.robot_run_id) return { id, action, status: 'cancellation_requested' }
+      if (row.active && !row.robot_run_id) {
+        try { await reconcilePreparedRun(row) } catch { /* Cancellation is already durable. */ }
+        row = run(sessionId, id)
+        if (!row.robot_run_id) return { id, action, status: 'cancellation_requested' }
+      }
     }
     if (!row.active) throw new ExperimentError('ROBOT_RUN_INACTIVE', 'This robot run is not active.')
     if (!row.robot_run_id) throw new ExperimentError('ROBOT_RUN_UNCONFIRMED', 'Read the current run again before controlling it.')
