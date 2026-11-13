@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write internal/experiment/README.md
 /internal-experiment-storage:
-  en: d1914b294e4e7da4
-  zh: 3e67d1a74d8f70d2
+  en: 9a4ca361d32052d2
+  zh: 0b26d7eb4a6e2c0d
 /internal-experiment-storage/initial-liquid-declarations:
   en: 970352b70b7598dd
   zh: 295903c2705013f6

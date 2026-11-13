@@ -36,6 +36,7 @@
     "apps/web/tests/scaffold.ts",
     "apps/web/tests/clock.e2e.ts",
     "apps/web/tests/voice-input.e2e.ts",
+    "apps/web/tests/voice-workbench.e2e.ts",
     "apps/web/tests/cot-translation.e2e.ts",
     "apps/web/tests/cot-translation-paid.e2e.ts",
     "apps/web/tests/forge-panel.e2e.ts",

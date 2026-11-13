@@ -29,6 +29,12 @@ export function apply(ctx, config) {
       getForSession(sessionId, id, revision) { requireOpen(); return store.getForSession(sessionId, id, revision) },
       updateForSession(sessionId, input) { requireOpen(); return store.updateForSession(sessionId, input) },
       getChecksForSession(sessionId, id, revision) { requireOpen(); return store.getChecksForSession(sessionId, id, revision) },
+      reserveRobotRun(input) { requireOpen(); return store.reserveRobotRun(input) },
+      robotRun(...args) { requireOpen(); return store.robotRun(...args) },
+      recordRobotRun(...args) { requireOpen(); return store.recordRobotRun(...args) },
+      requestRobotStop(...args) { requireOpen(); return store.requestRobotStop(...args) },
+      finishRobotRun(...args) { requireOpen(); return store.finishRobotRun(...args) },
+      activeRobotRun(...args) { requireOpen(); return store.activeRobotRun(...args) },
       backup(options) {
         requireOpen()
         const pending = store.backup(options)

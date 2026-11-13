@@ -115,7 +115,7 @@ test('schema 1 databases migrate and reject historically changed ownership', t =
   assert.throws(() => reopened.updateForSession('alice', { id: bound.id, expectedRevision: 2, snapshot: { ...initial, sessionId: 'alice' } }), isCode('SESSION_MISMATCH'))
   const created = reopened.createForSession('alice', { creationKey: 'old', snapshot: initial })
   assert.notEqual(created.experiment.id, bound.id)
-  assert.equal(reopened.db.prepare('PRAGMA user_version').get().user_version, 2)
+  assert.equal(reopened.db.prepare('PRAGMA user_version').get().user_version, 3)
 })
 
 test('checks bind revision and protocol hash, rejecting late and superseded results', t => {

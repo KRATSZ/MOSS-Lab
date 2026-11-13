@@ -1,4 +1,8 @@
 /** Register the experiment animation page in the right sidebar. */
+import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import { VoiceWorkbench, createVoiceNavigationStore } from './voice-workbench.tsx'
 import type { Context } from '@deepseek-ai/cordis'
 import { IconPlayOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -8,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { ExperimentBody, ExperimentTitle } from './Experiment.tsx'
 import { en, zh, ja, es, fr, de, ru, pt } from './locales.ts'
-import { robotStatusProvider, statusProvider, watchProvider } from './status.ts'
+import { robotStatusProvider, statusProvider, watchProvider, voiceWorkbenchProvider } from './status.ts'
 import { AutoOpenExperiment, createAutoOpenStore } from './auto-open.tsx'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 
@@ -16,7 +20,7 @@ const ID = '@deepseek-ai/dsh-client-ui-sidebar-experiment'
 const NS = 'sidebarExperiment'
 
 /** Services required by the browser plugin. */
-export const inject = ['slots', 'locale', 'sidebarRight', 'sidebarRightTabs', 'resources']
+export const inject = ['slots', 'locale', 'sidebarRight', 'sidebarRightTabs', 'resources', 'uiWorkspace', 'sessions']
 
 /** Register the localized tab type and its content. */
 export function apply(ctx: Context): void {
@@ -24,6 +28,15 @@ export function apply(ctx: Context): void {
   ctx.effect(() => ctx.resources.register(statusProvider), 'ui-sidebar-experiment.status')
   ctx.effect(() => ctx.resources.register(watchProvider), 'ui-sidebar-experiment.watch')
   ctx.effect(() => ctx.resources.register(robotStatusProvider), 'ui-sidebar-experiment.robot-status')
+  ctx.effect(() => ctx.resources.register(voiceWorkbenchProvider), 'ui-sidebar-experiment.voice-status')
+  const voiceStore = createVoiceNavigationStore()
+  ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay', id: `${ID}.voice`, store: voiceStore, locale: NS,
+    inject: () => ({ navigate: async (id: string, signal: AbortSignal) => {
+      await ctx.sessions.refresh()
+      if (!signal.aborted) ctx.uiWorkspace.openSession(SessionId(id))
+    } }),
+  }, VoiceWorkbench)), 'ui-sidebar-experiment.voice-navigation')
   const autoOpenStore = createAutoOpenStore()
   ctx.effect(() => ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
     name: 'conversation.composer.dock', id: ID, store: autoOpenStore,

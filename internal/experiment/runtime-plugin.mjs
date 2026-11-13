@@ -4,12 +4,12 @@ import { createPluginClient } from './plugin-client.mjs'
 export const name = 'labscriptai-runtime'
 export const inject = ['sandbox']
 
-/** Mount the local-only plugin adapter in the MOSS profile. */
+/** Mount the confined plugin adapter in the MOSS profile. */
 export function apply(ctx, config) {
   const client = createPluginClient({ ...config, sandbox: ctx.sandbox })
   const pending = new Set()
   let closing = false
-  const service = Object.fromEntries(['analyze', 'documents'].map(method => [method, async (...args) => {
+  const service = Object.fromEntries(['analyze', 'documents', 'robot'].map(method => [method, async (...args) => {
     if (closing) throw new Error('LabscriptAI runtime is closing')
     const operation = client[method](...args)
     pending.add(operation)

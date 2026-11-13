@@ -18,13 +18,17 @@ export interface AutoOpenInjected {
 /** Observe preview publication while the session is visible. */
 export function AutoOpenExperiment({ sessionId, useResource, useSidebarMounted, openExperiment, useStore, actions }: PropsRuntime<'conversation.composer.dock'> & InjectFace<AutoOpenInjected> & PropsStore<ReturnType<typeof createAutoOpenStore>>) {
   const resource = useResource<'experimentwatch'>(`dsh-resource://experimentwatch/${encodeURIComponent(sessionId)}`)
+  const voice = useResource<'voiceworkbench'>('dsh-resource://voiceworkbench/current')
+  const delegated = voice.value?.sessionId === sessionId && voice.value.status !== 'idle' ? voice.value : undefined
   const mounted = useSidebarMounted(value => value === sessionId)
   const opened = useStore(state => state.opened)
   const ready = resource.status === 'live' && resource.value?.status === 'ready' ? resource.value : undefined
-  const key = ready === undefined ? undefined : JSON.stringify([ready.id, ready.revision, ready.task])
+  const key = delegated !== undefined
+    ? JSON.stringify([delegated.focusSequence ?? delegated.sequence])
+    : ready === undefined ? undefined : JSON.stringify([ready.id, ready.revision, ready.task])
   useEffect(() => {
-    if (!mounted || key === undefined || key === opened) return
+    if (delegated !== undefined && voice.status !== 'live' || !mounted || key === undefined || key === opened) return
     if (openExperiment()) actions.markOpened(key)
-  }, [actions, key, mounted, openExperiment, opened])
+  }, [actions, delegated, key, mounted, openExperiment, opened, voice.status])
   return null
 }

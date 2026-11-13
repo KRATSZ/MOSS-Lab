@@ -10,7 +10,7 @@ const output = {
 }
 const id = { type: 'string', required: true, description: 'Experiment id returned by create_experiment.' }
 const requirement = { type: 'string', required: true, description: 'Complete experiment requirement.' }
-const protocol = { type: 'string', required: true, description: 'Complete Opentrons Flex Python protocol, including metadata and run(protocol). Declare known initial liquids with define_liquid and well.load_liquid before transfers; never substitute transfer totals for starting volumes. Mark undeclared starting volumes as unknown in assumptions. Use the simulation API only and do not connect to or command a robot.' }
+const protocol = { type: 'string', required: true, description: 'Complete Opentrons Flex or OT-2 Python protocol, including requirements.robotType, a compatible apiLevel, metadata, and run(protocol). Declare known initial liquids with define_liquid and well.load_liquid before transfers; never substitute transfer totals for starting volumes. Mark undeclared starting volumes as unknown in assumptions. Use the simulation API only and do not connect to or command a robot.' }
 const parameters = {
   type: 'object', additionalProperties: false, required: true,
   description: 'Record the experimental setup and assumptions used to write the protocol.',
@@ -32,11 +32,25 @@ function sessionId(exec) {
 export function apply(ctx) {
   ctx.effect(() => ctx.systemPrompt.section({
     name: 'labscriptai:experiment-workflow', order: 2550,
-    text: 'For an Opentrons protocol or 3D animation request, use create_experiment or update_experiment with complete Python source, then analyze_experiment on the returned current revision. Simulation and visualization use the pinned LabscriptAI plugin through analyze_experiment. Do not install simulation dependencies, import private plugin modules, or create another player. Report only results supported by tool output: preview_ready means local Opentrons analysis and preview generation succeeded, not complete validation, device readiness, experimental safety, or that a user saw the animation. Distinguish user-confirmed choices from assumptions and predictions; simulation does not observe physical results. A protocol comment or relative delay does not schedule an absolute time or record an observation. Report only steps actually present in the protocol, including any human confirmation or pause. State unconfirmed equipment, labware, deck positions, volumes, and other assumptions as assumptions. For repeated transfers, state the tip reuse policy and any cross-contamination risk; source volume must cover all transfers plus any applicable dead volume. Ask for essential missing details, or label assumptions for a requested example. If analysis or preview fails, explain it without claiming success. If a preview is unavailable after restart, analyze the current revision again. Never initiate a real robot run.',
+    text: 'For an Opentrons protocol or 3D animation request, use create_experiment or update_experiment with complete Python source, then analyze_experiment on the returned current revision. Simulation and visualization use the pinned LabscriptAI plugin through analyze_experiment. Do not install simulation dependencies, import private plugin modules, or create another player. Report only results supported by tool output: preview_ready means local Opentrons analysis and preview generation succeeded, not complete validation, device readiness, experimental safety, or that a user saw the animation. Distinguish user-confirmed choices from assumptions and predictions; simulation does not observe physical results. A protocol comment or relative delay does not schedule an absolute time or record an observation. Report only steps actually present in the protocol, including any human confirmation or pause. State unconfirmed equipment, labware, deck positions, volumes, and other assumptions as assumptions. For repeated transfers, state the tip reuse policy and any cross-contamination risk; source volume must cover all transfers plus any applicable dead volume. Confirm the robot type (Flex or OT-2) before choosing its API level, pipettes and deck layout. Ask for essential missing details, or label assumptions for a requested example. If analysis or preview fails, explain it without claiming success. If a preview is unavailable after restart, analyze the current revision again. These experiment tools operate locally. For an explicitly requested physical run, use the separate robot tools when available.',
   }), 'experiment-agent-tools.guidance')
   ctx.tools.register(defineTool({
+    name: 'request_experiment_input',
+    description: 'Ask one concise question for essential experiment details, then wait for the operator to answer.',
+    parameters: { question: { type: 'string', required: true, description: 'Question in the operator’s language.' } },
+    output,
+    async execute(args, exec) {
+      if (!args.question.trim() || Buffer.byteLength(args.question) > 2000) throw new Error('A concise nonempty question is required.')
+      const intent = ctx.get('mossVoiceIntent')?.captureIntent(sessionId(exec))
+      intent?.assertCurrent()
+      intent?.needsInput(args.question)
+      return { status: 'needs_input', question: args.question }
+    },
+  }))
+
+  ctx.tools.register(defineTool({
     name: 'create_experiment',
-    description: 'Create an Opentrons Flex experiment from a complete Python protocol for local simulation. After saving, call analyze_experiment to generate its animation. Ask for essential missing experimental details, or clearly state assumptions for a requested example. Do not initiate a robot run. Reuse the creation key on retry.',
+    description: 'Create an Opentrons Flex or OT-2 experiment from a complete Python protocol for local simulation. After saving, call analyze_experiment to generate its animation. Ask for essential missing experimental details, or clearly state assumptions for a requested example. Do not initiate a robot run. Reuse the creation key on retry.',
     parameters: {
       creationKey: { type: 'string', required: true, description: 'Stable key for retries of the same creation request.' },
       requirement,
@@ -51,8 +65,8 @@ export function apply(ctx) {
 
   ctx.tools.register(defineTool({
     name: 'get_experiment',
-    description: 'Read an experiment, its current revision, and available checks for this session.',
-    parameters: { id },
+    description: 'Read an experiment and its current checks. Omit id to read the latest experiment in this session.',
+    parameters: { id: { type: 'string', description: 'Experiment identifier. Omit for the latest one.' } },
     output,
     async execute(args, exec) {
       return ctx.experimentWorkflow.get({ sessionId: sessionId(exec), id: args.id })

@@ -13,6 +13,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     experimentwatch: { readonly status: 'waiting' | 'checking' } | Ready
     /** One on-demand, read-only robot status query. */
     robotstatus: RobotStatus
+    voiceworkbench: VoiceWorkbenchStatus
   }
 }
 
@@ -70,11 +71,11 @@ function parseStatus(value: unknown): { readonly status: 'waiting' | 'checking' 
   return { status: 'ready', id: value.id, revision: value.revision, task: value.task }
 }
 
-function delay(signal: AbortSignal): Promise<void> {
+function delay(signal: AbortSignal, milliseconds = 5000): Promise<void> {
   return new Promise((resolve) => {
     if (signal.aborted) { resolve(); return }
     const finish = (): void => { clearTimeout(timer); signal.removeEventListener('abort', finish); resolve() }
-    const timer = setTimeout(finish, 5000)
+    const timer = setTimeout(finish, milliseconds)
     signal.addEventListener('abort', finish, { once: true })
   })
 }
@@ -84,6 +85,7 @@ export const watchProvider: ResourceProvider<'experimentwatch'> = {
   protocol: 'experimentwatch',
   async *open(address, { signal }) {
     const session = decodeURIComponent(new URL(address).pathname.slice(1))
+    let active = false
     while (!signal.aborted) {
       try {
         if (!session) throw new Error('Missing session')
@@ -92,13 +94,14 @@ export const watchProvider: ResourceProvider<'experimentwatch'> = {
         if (!response.ok) throw new Error('Status request failed')
         const status = parseStatus(await response.json())
         if (status === undefined) throw new Error('Invalid status response')
+        active = status.status === 'checking'
         // oxlint-disable-next-line typescript/no-unnecessary-condition -- cancellation can occur while a request is awaited.
         if (!signal.aborted) yield { ok: true, value: status }
       } catch {
         // oxlint-disable-next-line typescript/no-unnecessary-condition -- cancellation can occur while a request is awaited.
         if (!signal.aborted) yield { ok: false, error: new RemoteError('experiment/status-unavailable', 'Experiment status is unavailable.', {}) }
       }
-      await delay(signal)
+      await delay(signal, active ? 1000 : 5000)
     }
   },
 }
@@ -108,6 +111,7 @@ export const statusProvider: ResourceProvider<'experimentstatus'> = {
   protocol: 'experimentstatus',
   async *open(address, { signal }) {
     let previous: Ready | undefined
+    let active = false
     while (!signal.aborted) {
       try {
         const url = new URL(address)
@@ -123,6 +127,7 @@ export const statusProvider: ResourceProvider<'experimentstatus'> = {
         const value: unknown = await response.json()
         const status = parseStatus(value)
         if (status === undefined) throw new Error('Invalid status response')
+        active = status.status === 'checking'
         if (status.status !== 'ready') {
           previous = undefined
           // oxlint-disable-next-line typescript/no-unnecessary-condition -- cancellation can occur while a request is awaited.
@@ -146,7 +151,55 @@ export const statusProvider: ResourceProvider<'experimentstatus'> = {
           error: new RemoteError('experiment/status-unavailable', 'Experiment status is unavailable.', {}),
         }
       }
-      await delay(signal)
+      await delay(signal, active ? 1000 : 5000)
     }
   },
 }
+
+export type VoiceWorkbenchStatus = {
+  readonly sequence: number
+  readonly sessionId: string | null
+  readonly jobId: string | null
+  readonly status: 'idle' | 'running' | 'completed' | 'error' | 'timeout'
+  readonly result: string | null
+  readonly focusSequence?: number
+  readonly phase?: string
+  readonly question?: string | null
+  readonly preview?: { readonly id: string; readonly revision: number } | null
+}
+
+/** Observe the voice task without creating a second conversation or model turn. */
+export const voiceWorkbenchProvider: ResourceProvider<'voiceworkbench'> = {
+  protocol: 'voiceworkbench',
+  async *open(_address, { signal }) {
+    let active = false
+    while (isActive(signal)) {
+      try {
+        const response = await fetch('api/xiaozhi-workbench', { signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]), credentials: 'same-origin', cache: 'no-store' })
+        if (!response.ok) throw new Error('Voice task unavailable')
+        const value: unknown = await response.json()
+        if (!isVoiceWorkbenchStatus(value)) throw new Error('Invalid voice task')
+        active = value.status === 'running' || value.status === 'timeout'
+        if (isActive(signal)) yield { ok: true, value }
+      } catch {
+        if (isActive(signal)) yield { ok: false, error: new RemoteError('experiment/status-unavailable', 'Voice task is unavailable.', {}) }
+      }
+      await delay(signal, active ? 1000 : 3000)
+    }
+  },
+}
+
+function isVoiceWorkbenchStatus(value: unknown): value is VoiceWorkbenchStatus {
+  if (typeof value !== 'object' || value === null) return false
+  return 'sequence' in value && Number.isSafeInteger(value.sequence) && Number(value.sequence) >= 0
+    && 'status' in value && ['idle', 'running', 'completed', 'error', 'timeout'].includes(String(value.status))
+    && 'sessionId' in value && (value.sessionId === null || (typeof value.sessionId === 'string' && value.sessionId.length > 0))
+    && 'jobId' in value && (value.jobId === null || typeof value.jobId === 'string')
+    && 'result' in value && (value.result === null || typeof value.result === 'string')
+    && (!('focusSequence' in value) || Number.isSafeInteger(value.focusSequence) && Number(value.focusSequence) >= 0)
+    && (!('phase' in value) || typeof value.phase === 'string')
+    && (!('question' in value) || value.question === null || typeof value.question === 'string')
+    && (!('preview' in value) || value.preview === null || typeof value.preview === 'object' && value.preview !== null && 'id' in value.preview && typeof value.preview.id === 'string' && 'revision' in value.preview && Number.isSafeInteger(value.preview.revision) && Number(value.preview.revision) > 0)
+}
+
+function isActive(signal: AbortSignal): boolean { return !signal.aborted }

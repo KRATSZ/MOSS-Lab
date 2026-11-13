@@ -1,3 +1,5 @@
+import { setTimeout as delay } from 'node:timers/promises'
+
 export const name = 'robot-status'
 export const inject = ['connection']
 
@@ -31,30 +33,39 @@ function instrumentsResult(payload, secrets) {
   return result
 }
 
-async function readJson(url, headers, timeoutMs, maxBytes) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const response = await fetch(url, { method: 'GET', headers, redirect: 'error', signal: controller.signal })
-    if (!response.ok || !response.body) return null
-    const reader = response.body.getReader()
-    const chunks = []
-    let size = 0
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      size += value.byteLength
-      if (size > maxBytes) return null
-      chunks.push(value)
+const transient = new Set(['ECONNRESET', 'ETIMEDOUT', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT'])
+
+async function readJson(url, headers, deadline, maxBytes, signal) {
+  for (let attempt = 0; attempt < 3 && !signal.aborted; attempt++) {
+    const remaining = Math.floor(deadline - performance.now())
+    if (remaining < 1) break
+    const local = new AbortController()
+    const timeout = AbortSignal.timeout(Math.ceil(remaining / (3 - attempt)))
+    const scope = AbortSignal.any([signal, timeout, local.signal])
+    let retry = false
+    try {
+      const response = await fetch(url, { method: 'GET', headers, redirect: 'error', signal: scope })
+      if (response.ok && response.body) {
+        const chunks = []
+        let size = 0
+        for await (const chunk of response.body) {
+          size += chunk.byteLength
+          if (size > maxBytes) return null
+          chunks.push(chunk)
+        }
+        return JSON.parse(Buffer.concat(chunks, size).toString('utf8'))
+      }
+      retry = [502, 503, 504].includes(response.status)
+    } catch (error) {
+      retry = timeout.aborted || transient.has(error.cause?.code ?? error.code)
+    } finally {
+      local.abort()
     }
-    return JSON.parse(Buffer.concat(chunks, size).toString('utf8'))
-  } catch (error) {
-    // Upstream errors may contain the configured address or credentials.
-    return null
-  } finally {
-    controller.abort()
-    clearTimeout(timer)
+    if (!retry || attempt === 2 || signal.aborted) break
+    const wait = Math.min(150, Math.floor((deadline - performance.now()) / 4))
+    if (wait > 0) await delay(wait, undefined, { signal }).catch(() => {})
   }
+  return null
 }
 
 /**
@@ -89,17 +100,16 @@ export function apply(ctx, config) {
     path: '/api/robot-status',
     methods: ['GET'],
     requestBody: 'buffered',
-    fetch: async () => {
+    fetch: async request => {
       const queriedAt = new Date().toISOString()
       let health = null
       let instruments = null
       if (target) {
-        const [healthPayload, instrumentsPayload] = await Promise.all([
-          readJson(new URL('/health', target), headers, config.timeoutMs, config.maxBytes),
-          readJson(new URL('/instruments', target), headers, config.timeoutMs, config.maxBytes),
-        ])
-        health = healthResult(healthPayload, secrets)
-        instruments = instrumentsResult(instrumentsPayload, secrets)
+        const started = performance.now()
+        const deadline = started + config.timeoutMs
+        const signal = AbortSignal.any([request.signal, AbortSignal.timeout(config.timeoutMs)])
+        health = healthResult(await readJson(new URL('/health', target), headers, started + config.timeoutMs / 2, config.maxBytes, signal), secrets)
+        instruments = instrumentsResult(await readJson(new URL('/instruments', target), headers, deadline, config.maxBytes, signal), secrets)
       }
       const status = !configured ? 'not_configured' : health && instruments ? 'ready' : health || instruments ? 'partial' : 'unreachable'
       return Response.json({ status, queriedAt, health, instruments }, { headers: { 'Cache-Control': 'private, no-store' } })

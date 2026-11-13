@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { chmodSync, closeSync, linkSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, realpathSync, rmSync, rmdirSync, statSync, unlinkSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 const CHECK_STATUSES = new Set(['passed', 'failed', 'error', 'blocked'])
 
 /** An expected experiment-domain failure with a stable code and optional details. */
@@ -64,9 +64,12 @@ export class ExperimentStore {
       const integrity = this.db.prepare('PRAGMA integrity_check').all()
       if (integrity.length !== 1 || integrity[0].integrity_check !== 'ok') throw new ExperimentError('INTEGRITY_ERROR', 'SQLite integrity check failed', { results: integrity })
       const version = this.db.prepare('PRAGMA user_version').get().user_version
-      if (create) {
-        if (version !== 0) throw new ExperimentError('SCHEMA_ERROR', 'new database has an unexpected schema version')
-        this.transaction(() => {
+      if (!create && ![1, 2, SCHEMA_VERSION].includes(version)) {
+        throw new ExperimentError('SCHEMA_ERROR', 'unsupported experiment database schema', { found: version, supported: SCHEMA_VERSION })
+      }
+      if (create || version < SCHEMA_VERSION) this.transaction(() => {
+        if (create) {
+          if (version !== 0) throw new ExperimentError('SCHEMA_ERROR', 'new database has an unexpected schema version')
           this.db.exec(`
             CREATE TABLE experiments (id TEXT PRIMARY KEY, creation_key TEXT NOT NULL UNIQUE, initial_json TEXT NOT NULL, current_revision INTEGER NOT NULL);
             CREATE TABLE revisions (experiment_id TEXT NOT NULL REFERENCES experiments(id), revision INTEGER NOT NULL, snapshot_json TEXT NOT NULL, protocol_hash TEXT, created_at TEXT NOT NULL, PRIMARY KEY (experiment_id, revision));
@@ -75,16 +78,21 @@ export class ExperimentStore {
             CREATE INDEX checks_by_revision ON checks (experiment_id, revision, check_name, sequence);
             CREATE TRIGGER revisions_no_update BEFORE UPDATE ON revisions BEGIN SELECT RAISE(ABORT, 'revisions are immutable'); END;
             CREATE TRIGGER revisions_no_delete BEFORE DELETE ON revisions BEGIN SELECT RAISE(ABORT, 'revisions are immutable'); END;
-            PRAGMA user_version = ${SCHEMA_VERSION};
           `)
-        })
-      } else if (version === 1) {
-        this.transaction(() => {
-          this.db.exec(`CREATE TABLE IF NOT EXISTS session_creation_keys (session_id TEXT NOT NULL, creation_key TEXT NOT NULL, experiment_id TEXT NOT NULL REFERENCES experiments(id), PRIMARY KEY (session_id, creation_key), UNIQUE (experiment_id)); PRAGMA user_version = ${SCHEMA_VERSION};`)
-        })
-      } else if (version !== SCHEMA_VERSION) {
-        throw new ExperimentError('SCHEMA_ERROR', 'unsupported experiment database schema', { found: version, supported: SCHEMA_VERSION })
-      }
+        } else if (version === 1) {
+          this.db.exec('CREATE TABLE IF NOT EXISTS session_creation_keys (session_id TEXT NOT NULL, creation_key TEXT NOT NULL, experiment_id TEXT NOT NULL REFERENCES experiments(id), PRIMARY KEY (session_id, creation_key), UNIQUE (experiment_id));')
+        }
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS robot_runs (
+            id TEXT PRIMARY KEY, session_id TEXT NOT NULL, experiment_id TEXT NOT NULL,
+            revision INTEGER NOT NULL, target TEXT NOT NULL, robot_serial TEXT NOT NULL, robot_type TEXT NOT NULL,
+            robot_run_id TEXT, active INTEGER NOT NULL DEFAULT 1, cancel_requested INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (experiment_id, revision) REFERENCES revisions(experiment_id, revision)
+          );
+          CREATE UNIQUE INDEX IF NOT EXISTS robot_active_run ON robot_runs (target) WHERE active = 1;
+          PRAGMA user_version = ${SCHEMA_VERSION};
+        `)
+      })
     } catch (error) {
       this.db.close()
       throw error
@@ -274,6 +282,58 @@ export class ExperimentStore {
       this.db.prepare('UPDATE experiments SET current_revision = ? WHERE id = ?').run(next, input.id)
       return this.readRevision(input.id, next)
     })
+  }
+
+  /** Reserve the configured device across retries and process restarts. */
+  reserveRobotRun({ sessionId, experimentId, revision, target, robotSerial, robotType }) {
+    return this.transaction(() => {
+      const experiment = this.assertSession(experimentId, sessionId, revision)
+      this.assertCurrentCheck({ id: experimentId, revision, protocolHash: experiment.protocolHash })
+      const existing = this.db.prepare('SELECT id FROM robot_runs WHERE target = ? AND active = 1').get(target)
+      if (existing) throw new ExperimentError('ROBOT_RUN_ACTIVE', 'A run is already active or unconfirmed on this robot. Check its state before starting another.')
+      const id = randomUUID()
+      this.db.prepare('INSERT INTO robot_runs (id, session_id, experiment_id, revision, target, robot_serial, robot_type) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, sessionId, experimentId, revision, target, robotSerial, robotType)
+      return id
+    })
+  }
+
+  /** Resolve a robot-run receipt within its owning session, including after restart. */
+  robotRun(sessionId, id) {
+    this.assertStorage()
+    const row = this.db.prepare('SELECT * FROM robot_runs WHERE session_id = ? AND id = ?').get(sessionId, id)
+    if (!row) throw new ExperimentError('ROBOT_RUN_NOT_FOUND', 'Robot run was not found in this session.')
+    return row
+  }
+
+  /** Save the physical run ID before dispatching motion. */
+  recordRobotRun(sessionId, id, robotRunId) {
+    this.transaction(() => {
+      const row = this.robotRun(sessionId, id)
+      if (!row.active || row.robot_run_id && row.robot_run_id !== robotRunId) throw new ExperimentError('STALE_TASK', 'Robot run receipt has changed.')
+      this.db.prepare('UPDATE robot_runs SET robot_run_id = ? WHERE id = ?').run(robotRunId, id)
+    })
+  }
+
+  /** Record a stop request before dispatching it to the device. */
+  requestRobotStop(sessionId, id) {
+    return this.transaction(() => {
+      this.robotRun(sessionId, id)
+      return this.db.prepare('UPDATE robot_runs SET cancel_requested = 1 WHERE id = ? AND active = 1').run(id).changes === 1
+    })
+  }
+
+  /** Release only a definitively finished or definitively blocked run. */
+  finishRobotRun(sessionId, id) {
+    this.transaction(() => {
+      this.robotRun(sessionId, id)
+      this.db.prepare('UPDATE robot_runs SET active = 0 WHERE id = ?').run(id)
+    })
+  }
+
+  /** Locate this session's active run without exposing another operator's run. */
+  activeRobotRun(sessionId, target) {
+    this.assertStorage()
+    return this.db.prepare('SELECT id FROM robot_runs WHERE session_id = ? AND target = ? AND active = 1').get(sessionId, target)?.id ?? null
   }
 
   /** Start a named check for the current revision, superseding any prior task of that name.

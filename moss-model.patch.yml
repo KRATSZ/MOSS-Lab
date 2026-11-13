@@ -19,8 +19,13 @@
     - id: robot-status
       name: ./internal/experiment/robot-status-plugin.mjs
       config:
-        timeoutMs: 3000
+        timeoutMs: 6000
         maxBytes: 262144
+    - id: robot-control
+      name: ./internal/experiment/robot-control-plugin.mjs
+      config:
+        url: !!js "process.env.OPENTRONS_URL ?? ''"
+        allowLive: !!js "process.env.MOSS_ALLOW_LIVE_ROBOT === '1'"
     - id: protocol-analyzer
       name: ./internal/experiment/analyzer-plugin.mjs
     - id: experiment-workflow
@@ -35,6 +40,57 @@
       name: ./internal/xiaozhi/plugin.mjs
       config:
         sessionId: null
+        agentPreset: moss-experiment
+        bindingPath: !!js "process.env.DSH_HOME + '/xiaozhi-session.json'"
+        workspacePath: !!js process.cwd()
+        feedback:
+          offsetsMs: [0, 15000, 45000]
+          pollWaitMs: 4000
+        transport:
+          reconnectMinMs: 1000
+          reconnectMaxMs: 30000
+          connectTimeoutMs: 10000
+          heartbeatMs: 20000
+        wakeup:
+          enabled: !!js "process.env.MOSS_AUTO_WAKE === '1'"
+          browserApp: !!js "process.env.MOSS_BROWSER_APP || 'Google Chrome'"
+          timeoutMs: 10000
+- insert:
+    - id: preset-moss-experiment
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: moss-experiment
+        name: 实验助手
+        description: 实验方案、三维预览和机器人运行
+        order: 4
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: >-
+                You are the laboratory experiment assistant. Respond briefly in the user's language.
+                For a simple echo or connectivity test, respond directly.
+                While preparing, accept amendments. Preserve confirmed conditions and the same experiment ID.
+                When essential conditions are missing, call request_experiment_input with one grouped question and wait.
+                Confirm Flex or OT-2 before choosing the protocol API, labware, pipettes, and slot layout.
+                For a follow-up, read the current experiment revision, update it, and analyze the new revision.
+                Create a new experiment only on explicit request or when the session has no experiment yet.
+                Use the experiment tools for local analysis and preview. Physical results require a real run.
+                When explicitly asked to operate a physical robot, use the robot tools and the workbench confirmation.
+                Read get_robot_run for actual results. If the connection drops, read the run before attempting any further operation.
+                Do not inspect or modify application code or run shell commands.
+              complete: true
+              includeRuntimeContext: false
+          - id: robot-tools
+            name: './internal/experiment/robot-tools.mjs'
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
 - insert:
     - id: preset-chat
       name: '@deepseek-ai/dsh-agent-preset'

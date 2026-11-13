@@ -28,7 +28,7 @@ async function setup() {
 test('registers scoped experiment tools and removes them on disposal', async () => {
   const { ctx, fiber, tools } = await setup()
   try {
-    assert.deepEqual(Object.keys(tools).sort(), ['analyze_experiment', 'create_experiment', 'get_experiment', 'update_experiment'])
+    assert.deepEqual(Object.keys(tools).sort(), ['analyze_experiment', 'create_experiment', 'get_experiment', 'request_experiment_input', 'update_experiment'])
     assert.ok(ctx.tools.schemas().every(schema => !Object.hasOwn(schema.parameters.properties, 'sessionId')))
     assert.ok(Object.hasOwn(tools.update_experiment.parameters.properties, 'protocol'))
     for (const name of ['create_experiment', 'update_experiment']) {

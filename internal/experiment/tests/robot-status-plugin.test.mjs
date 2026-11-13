@@ -110,3 +110,23 @@ test('omits configured credentials and address even in selected fields', async t
   assert.deepEqual(value.health, { status: null, robotModel: null })
   assert.deepEqual(value.instruments, [{ mount: 'left', name: null }])
 })
+
+test('retries transient resets sequentially and leaves time for instruments when health stalls', async t => {
+  const seen = []
+  let stallHealth = false
+  const url = await serverFor(t, (req, res) => {
+    seen.push(req.url)
+    if (req.url === '/health') {
+      if (stallHealth) { res.write('{'); return }
+      if (seen.length < 3) { req.socket.destroy(); return }
+    }
+    res.end(JSON.stringify(req.url === '/health' ? { status: 'ok' } : { data: [] }))
+  })
+  const query = await routeFor(t, url, { timeoutMs: 600 })
+  assert.equal((await query()).status, 'ready')
+  assert.deepEqual(seen, ['/health', '/health', '/health', '/instruments'])
+  stallHealth = true
+  const value = await query()
+  assert.equal(value.status, 'partial')
+  assert.deepEqual(value.instruments, [])
+})

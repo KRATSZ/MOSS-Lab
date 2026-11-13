@@ -30,7 +30,16 @@ try {
   const wells = documents.files.find(file => file.name === 'wells.csv').bytes.toString()
   assert.match(wells, /B3,[^\r\n]*,A1,[^\r\n]*1000/)
   assert.doesNotMatch(documents.setup.toString(), /<script>/)
-  console.log(JSON.stringify({ ok: true, version: runtime.version, revision: runtime.revision, artifact_api: runtime.artifact_api,
+  const ot2Protocol = await readFile(new URL('../internal/experiment/tests/example_ot2_transfer.py', import.meta.url), 'utf8')
+  const ot2Analysis = await client.analyze(ot2Protocol)
+  assert.equal(JSON.parse(ot2Analysis).robotType, 'OT-2 Standard')
+  const ot2Documents = await client.documents(ot2Analysis)
+  assert.ok(ot2Documents.animation?.length > 1000 && ot2Documents.setup?.length > 1000, 'OT-2 documents unavailable')
+  const ot2Setup = ot2Documents.files.find(file => file.name === 'setup.json')
+  assert.ok(ot2Setup, 'OT-2 setup data unavailable')
+  const ot2Source = JSON.parse(ot2Setup.bytes.toString()).labware.find(labware => labware.slot === '3')
+  assert.equal(Object.values(ot2Source.initial.A1).reduce((total, volume) => total + volume, 0), 100)
+  console.log(JSON.stringify({ ok: true, ot2_animation_bytes: ot2Documents.animation.length, version: runtime.version, revision: runtime.revision, artifact_api: runtime.artifact_api,
     animation_bytes: documents.animation.length, setup_bytes: documents.setup.length }))
 } finally {
   await ctx.fiber.dispose()

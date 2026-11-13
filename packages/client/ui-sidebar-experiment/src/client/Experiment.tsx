@@ -16,12 +16,23 @@ export function ExperimentBody({ t, useResource, useTabInfo, sessionId }: PropsL
   const watched = useResource<'experimentwatch'>(`dsh-resource://experimentwatch/${encodeURIComponent(sessionId)}`)
   const task = watched.status === 'live' && watched.value !== undefined ? (watched.value.status === 'ready' ? watched.value.task : null) : undefined
   const demo = demoTask !== undefined && (task == null || task === demoTask)
-  const address = `dsh-resource://experimentstatus/${encodeURIComponent(sessionId)}/${encodeURIComponent(tab.id)}/${generation}`
+  const voice = useResource<'voiceworkbench'>('dsh-resource://voiceworkbench/current')
+  const voiceTask = !demo && voice.value?.sessionId === sessionId ? voice.value : undefined
+  const published = voiceTask?.preview
+  const needsInput = voiceTask?.phase === 'needs_input'
+  const voiceUnavailable = voiceTask !== undefined && (voice.status === 'failed' || voice.status === 'none')
+  const updating = (voiceTask?.status === 'running' || voiceTask?.status === 'timeout') && !published
+  const receipt = voiceTask ? `/${voiceTask.sequence}/${published ? 'preview_ready' : voiceTask.status}` : ''
+  const address = `dsh-resource://experimentstatus/${encodeURIComponent(sessionId)}/${encodeURIComponent(tab.id)}/${generation}${receipt}`
   const resource = useResource<'experimentstatus'>(demo ? `${address}?mode=demo` : address)
-  const ready = resource.status === 'live' && resource.value?.status === 'ready' ? resource.value : undefined
-  const failed = resource.status === 'failed' || resource.status === 'none'
-  const message = failed ? t('error')
-    : resource.status === 'loading' || resource.value?.status === 'checking' ? t('checking') : demo ? t('demoWaiting') : t('waiting')
+  const current = resource.status === 'live' && resource.value?.status === 'ready' ? resource.value : undefined
+  const matches = !published || current?.id === published.id && current.revision === published.revision
+  const requestFailed = voiceTask?.status === 'error'
+  const ready = current && !updating && !voiceUnavailable && (!requestFailed || published != null) && matches ? current : undefined
+  const failed = requestFailed || voiceUnavailable || resource.status === 'failed' || resource.status === 'none'
+  const message = requestFailed ? `${t('voiceFailed')} ${voiceTask.result ?? ''}` : failed ? t('error')
+    : needsInput ? t('voiceNeedsInput') : updating ? t('voiceWorking')
+      : resource.status === 'loading' || resource.value?.status === 'checking' ? t('checking') : demo ? t('demoWaiting') : t('waiting')
   return (
     <div className={css.preview}>
       {demo && <div className={css.demoInfo}>
@@ -52,6 +63,9 @@ export function ExperimentBody({ t, useResource, useTabInfo, sessionId }: PropsL
               <div>{t('robotTime')}: {new Date(robotValue.queriedAt).toLocaleString()}</div>
             </>}
       </div>}
+      {needsInput && voiceTask.question && <div className={css.robotInfo} role="status">{voiceTask.question}</div>}
+      {ready && requestFailed && <div className={css.robotInfo} role="alert">{message}</div>}
+      {ready && !demo && <div className={css.robotInfo} data-experiment-revision={ready.revision}>{t('revision')} {ready.revision}</div>}
       {ready
         ? viewMode === 'setup'
           ? ready.setupDocument === null

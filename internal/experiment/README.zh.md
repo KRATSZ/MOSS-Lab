@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-此内部 Node 模块将实验快照和检查结果存入明确指定的 SQLite 文件。本地启动器挂载其 Cordis 服务、认证预览路由和只读设备状态路由；设备控制尚未接入。
+此内部 Node 模块将实验快照和检查结果存入明确指定的 SQLite 文件。本地启动器挂载其 Cordis 服务、认证预览路由和只读设备状态路由，以及通过 LabscriptAI 插件启用的可选真机控制。
 
 启用时，在本地 profile 补丁或 `--patch` 覆盖文件中添加以下条目，并将两个路径替换为主机上的绝对路径：
 
@@ -23,7 +23,7 @@
 
 `update({ id, expectedRevision, snapshot })` 提交完整的新快照，或者抛出包含当前版本的 `REVISION_CONFLICT`。初始快照包含非空字符串 `sessionId` 时，每次更新都必须保留该值。`get(id, revision)` 读取历史版本；省略版本则读取最新版本。SQLite 中的修订行不能更新或删除。需求、参数、协议和设备配置变更均须创建新版本，检查结果不会继承。
 
-内部服务还提供 `createForSession(sessionId, input)`、`getForSession(sessionId, id, revision)`、`updateForSession(sessionId, input)` 和 `getChecksForSession(sessionId, id, revision)`。主机必须提供可信的非空会话身份。创建时会将该身份写入快照，拒绝冲突的传入 `sessionId`，并按会话隔离幂等键；更新时必须包含相同的 `sessionId`。读取和更新会以 `SESSION_MISMATCH` 拒绝初始快照无所有者、所有者不同以及 `sessionId` 不同的修订。更新在同一事务内检查归属并提交。打开 schema 1 数据库时会通过事务迁移至 schema 2 并添加辅助创建键表；已有全局键与会话键分开，不会自动采用。
+内部服务还提供 `createForSession(sessionId, input)`、`getForSession(sessionId, id, revision)`、`updateForSession(sessionId, input)` 和 `getChecksForSession(sessionId, id, revision)`。主机必须提供可信的非空会话身份。创建时会将该身份写入快照，拒绝冲突的传入 `sessionId`，并按会话隔离幂等键；更新时必须包含相同的 `sessionId`。读取和更新会以 `SESSION_MISMATCH` 拒绝初始快照无所有者、所有者不同以及 `sessionId` 不同的修订。更新在同一事务内检查归属并提交。打开 schema 1 或 2 数据库时会通过事务迁移至 schema 3，并添加按会话保存的机器人运行记录。schema 1 还会添加辅助创建键表；已有全局键与会话键分开，不会自动采用。
 
 `startCheck({ id, revision, protocolHash, name })` 返回任务标识并将该检查标记为运行中。`finishCheck` 必须提供返回的字段、终态 `status`（`passed`、`failed`、`error` 或 `blocked`）及 JSON `result`。只有当前版本、准确协议哈希和该名称的最新任务可以完成；旧任务或重复结果以 `STALE_TASK` 失败，错误哈希以 `PROTOCOL_MISMATCH` 失败。`getChecks(id, revision)` 按创建顺序读取尝试记录。再次启动同名检查会将运行中的尝试标记为 `superseded`，并保留之前的结果。
 

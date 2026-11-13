@@ -1,4 +1,4 @@
-/** Local-only MCP adapter. Plugin source, simulation dependencies, and HTML remain externally owned. */
+/** Confined adapter for the public LabscriptAI MCP interface. */
 import { Client } from '@modelcontextprotocol/client'
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 import { createHash } from 'node:crypto'
@@ -37,11 +37,12 @@ export function createPluginClient(config) {
     if (typeof config?.[key] !== 'string' || !config[key]) throw new Error(`LabscriptAI client requires ${key}`)
   }
   if (!Number.isSafeInteger(config.timeoutMs) || config.timeoutMs < 150000 || !config.sandbox) throw new Error('LabscriptAI client requires sandbox and timeoutMs >= 150000')
-  async function invoke(operation) {
+  async function invoke(operation, robot, beforeDispatch) {
     const directory = await mkdtemp(join(await realpath(config.data), 'mcp-'))
     const home = join(directory, 'home')
     await mkdir(home)
-    const signal = AbortSignal.timeout(config.timeoutMs)
+    const timeoutMs = robot && !beforeDispatch ? Math.min(config.timeoutMs, 30000) : config.timeoutMs
+    const signal = AbortSignal.timeout(timeoutMs)
     let confined
     try { confined = await config.sandbox.confine([process.execPath, join(config.root, 'servers/opentrons-mcp/index.js')], { mode: 'workspace-write', workspaceRoot: directory }, signal) } catch (error) {
       await rm(directory, { recursive: true, force: true })
@@ -51,24 +52,32 @@ export function createPluginClient(config) {
     const transport = new StdioClientTransport({ command: confined.argv[0], args: confined.argv.slice(1), cwd: directory, stderr: 'pipe',
       env: { ...env, HOME: home, TMPDIR: directory, TEMP: directory, TMP: directory, PYTHONDONTWRITEBYTECODE: '1',
         PLUGIN_DATA: directory, OPENTRONS_PLUGIN_ROOT: config.root, LABSCRIPTAI_HOME: config.dependencyHome,
-        FLEX3D_EXPORT: join(directory, 'export'), MUJOCO_GL: 'disable' }, maxBufferSize: 12 * 1024 * 1024,
+        FLEX3D_EXPORT: join(directory, 'export'), OPENTRONS_CONNECTION_FILE: join(directory, 'robot.json'),
+        ...(robot ? { OPENTRONS_HOST: robot.origin, ...(robot.authorization ? { OPENTRONS_AUTHORIZATION: robot.authorization } : {}) } : {}), MUJOCO_GL: 'disable' }, maxBufferSize: 12 * 1024 * 1024,
     })
     const client = new Client({ name: 'moss-lab-artifacts', version: '1' })
     let diagnostic = ''
     transport.stderr.on('data', chunk => { diagnostic = (diagnostic + chunk.toString()).slice(-4096) })
     let unsettled = false
     try {
-      await client.connect(transport, { signal, timeout: config.timeoutMs })
+      await client.connect(transport, { signal, timeout: timeoutMs })
       if (client.getServerVersion()?.version !== config.version) throw new ExperimentError('PLUGIN_VERSION_MISMATCH', 'plugin version differs from the lock; rerun installation')
       const call = async (name, args) => {
-        if (!['simulate_protocol', 'protocol_artifacts'].includes(name)) throw new Error('MCP operation is not allowed')
+        const allowed = robot ? ['robot_status', 'query_history', 'run_protocol', 'preflight_run_setup', 'control_run'] : ['simulate_protocol', 'protocol_artifacts']
+        if (!allowed.includes(name)) throw new Error('MCP operation is not allowed')
+        beforeDispatch?.()
         unsettled = true
-        const response = await client.callTool({ name, arguments: args }, { signal, timeout: config.timeoutMs })
+        const response = await client.callTool({ name, arguments: args }, { signal, timeout: timeoutMs })
         unsettled = false
         const text = response.content?.find(item => item.type === 'text')?.text
         let envelope
         try { envelope = JSON.parse(text) } catch (error) { throw new ExperimentError('PLUGIN_RESPONSE_INVALID', 'plugin returned unreadable JSON', { cause: error.message }) }
-        if (response.isError || envelope.success !== true) throw new ExperimentError('PLUGIN_CALL_FAILED', envelope.error?.message || 'plugin operation failed')
+        if (response.isError || envelope.success !== true) {
+          const blocked = envelope.data?.blocked_real_execution === true
+          throw new ExperimentError(blocked ? 'ROBOT_PREFLIGHT_BLOCKED' : 'PLUGIN_CALL_FAILED',
+            robot ? (blocked ? 'OT blocked this run during its software checks.' : 'OT could not confirm the robot operation. Check its current state before retrying.') : envelope.error?.message || 'plugin operation failed',
+            robot ? { runId: envelope.run_id, stage: envelope.data?.gate_stage } : {})
+        }
         return envelope.data
       }
       const result = await operation(call, directory)
@@ -85,11 +94,19 @@ export function createPluginClient(config) {
     }
   }
   return {
+    robot(robot, name, args, protocol, beforeDispatch) {
+      return invoke(async (call, directory) => {
+        if (protocol === undefined) return call(name, args)
+        const input = join(directory, 'protocol.py')
+        await writeFile(input, protocol, { mode: 0o600, flag: 'wx' })
+        return call(name, { ...args, file_path: input })
+      }, robot, beforeDispatch)
+    },
     analyze(protocol) {
       return invoke(async (call, directory) => {
         const input = join(directory, 'protocol.py')
         await writeFile(input, protocol, { mode: 0o600, flag: 'wx' })
-        const result = await call('simulate_protocol', { protocol_path: input })
+        const result = await call('simulate_protocol', { protocol_path: input, analysis_only: true })
         if (!result?.ok) {
           const detail = result?.analyze_errors?.map(error => error.detail || error.error || '').filter(Boolean).join('\n') || result?.error?.error || result?.stderr || 'plugin analysis failed'
           throw new ExperimentError('ANALYSIS_FAILED', `protocol analysis failed: ${String(detail).slice(0, 1800)}`)

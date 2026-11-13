@@ -13,7 +13,7 @@ export function apply(ctx, config) {
   // Rebuild a preview from the analysis persisted with its passed check after a restart.
   // Each completed analysis is attempted at most once per process.
   const recover = sessionId => {
-    if (closing || recovering.has(sessionId)) return
+    if (closing || recovering.has(sessionId) || ctx.get('mossVoiceIntent')?.isPreparing(sessionId)) return
     let experiment
     try { experiment = ctx.experimentStore.latestForSession(sessionId) } catch { return }
     if (!experiment) return
@@ -36,12 +36,20 @@ export function apply(ctx, config) {
     fetch: async request => {
       const url = new URL(request.url)
       const sessionId = url.searchParams.get('session')
-      if (url.searchParams.get('resource') !== 'status' || !sessionId) return resources.fetch(request)
+      const resource = url.searchParams.get('resource')
+      if (!sessionId) return resources.fetch(request)
+      if (ctx.get('mossVoiceIntent')?.isPreparing(sessionId)) {
+        return resource === 'status'
+          ? Response.json({ status: 'checking' }, { headers: { 'Cache-Control': 'private, no-store' } })
+          : new Response(null, { status: 409, headers: { 'Cache-Control': 'private, no-store' } })
+      }
+      if (resource !== 'status') return resources.fetch(request)
       const response = await resources.fetch(request)
       const value = await response.json().catch(() => null)
       if (value?.status === 'ready') return Response.json(value, { headers: { 'Cache-Control': 'private, no-store' } })
       recover(sessionId)
-      return Response.json(recovering.has(sessionId) ? { status: 'checking' } : { status: 'waiting' }, { headers: { 'Cache-Control': 'private, no-store' } })
+      const active = ctx.get('experimentWorkflow')?.isAnalyzing(sessionId)
+      return Response.json(recovering.has(sessionId) || active ? { status: 'checking' } : { status: 'waiting' }, { headers: { 'Cache-Control': 'private, no-store' } })
     },
   }), 'experiment-preview.route')
   const pending = new Set()
@@ -56,6 +64,10 @@ export function apply(ctx, config) {
       preparing.add(input.id)
       const operation = (async () => {
         const preview = await buildPreview({ ...input, store: ctx.experimentStore, runtime: ctx.labscriptaiRuntime, temporaryRoot: config.temporaryRoot })
+        try { input.assertCurrent?.() } catch (error) {
+          await rm(preview.directory, { recursive: true, force: true })
+          throw error
+        }
         if (closing) {
           await rm(preview.directory, { recursive: true, force: true })
           throw new Error('experiment preview is closing')
@@ -73,6 +85,10 @@ export function apply(ctx, config) {
         if (!resources.isCurrent(preview)) {
           await rm(preview.directory, { recursive: true, force: true })
           throw new Error('experiment changed before preview publication')
+        }
+        try { input.assertCurrent?.() } catch (error) {
+          await rm(preview.directory, { recursive: true, force: true })
+          throw error
         }
         resources.publish(preview)
         resources.select(preview.id)

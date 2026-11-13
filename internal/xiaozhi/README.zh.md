@@ -2,32 +2,29 @@
 
 [English](README.md) | 中文
 
-此内部 Cordis 插件由本地启动配置启用。插件读取项目根目录 `.env` 中的 `XIAOZHI_WSS_URL`，主动建立一条 WSS 连接，地址和凭据不会写入日志。只支持 `wss:`；连接关闭后不自动重连，卸载插件时关闭连接。
+本地 MOSS 启动配置把此 Cordis 插件与已有网页 Agent 一同挂载。配置 `XIAOZHI_WSS_URL` 时建立一条主动 WSS 连接并提供 MCP 工具；地址是凭据，不写入日志。不配置接入点时仍可使用认证后的本地工作台。连接断开后按有上限的指数退避重连，并用 WebSocket ping/pong 检查链路。重连会重新注册工具，不重发已接受的 Agent 任务；任务回执仍只保存在内存中。
 
-桥接以 WebSocket 文本消息交换 MCP JSON-RPC。已连接配置的接入点观察到 `initialize`、`notifications/initialized` 和 `tools/list` 请求并收到工具清单。硬件语音调用和断线恢复尚未验证。没有主动通知或语音播报能力。
+语音委派使用名为**实验助手**的 `moss-experiment` 预设，提供实验角色及实验工具，包括用于追问必要条件的 `request_experiment_input`，不载入通用编程模式、Shell 或仓库工程指令。
 
-插件注入 `experimentStore`、`sessionController` 和 `workspaceRegistry`。只读工具绑定到部署者选定的一个 `sessionId`；启动配置将其设为 null，状态工具可用，实验查询会明确提示未绑定，小智请求不能选择会话。可信部署者可将其改为一个明确允许的会话：
+`moss_delegate(message, newExperiment=false)` 把用户原话交给当前实验会话。补充条件和修改参数复用同一会话；只有明确的新实验才另建。模型不能传入会话 ID。部署者可通过 `sessionId` 指定初始会话；未指定时首条请求使用已有工作区，尚无工作区时使用配置的 `workspacePath` 创建会话。私有 `bindingPath` 文件以原子替换保存当前会话和导航序号。重启后的下一条消息复用该身份；原会话缺失或仍使用旧编程模式时报告错误，不悄悄另建会话；明确开始新实验后采用实验模式，旧对话继续保留。
 
-```yaml
-- insert:
-    - id: xiaozhi-readonly
-      name: file:///absolute/path/to/internal/xiaozhi/plugin.mjs
-      config:
-        sessionId: REPLACE_WITH_AUTHORIZED_SESSION_ID
-```
+`moss_task_status(jobId, userQuery=false)` 跟踪已接受的轮次。`completed` 只表示 Agent 已回复，包括追问，绝不表示真机实验完成。新改口立即取代旧语音要求，并引导同一会话继续处理；未被领取的旧语音输入被移除，失效分析不能发布通过记录或预览。超时或提交结果不确定时仍保留跟踪。关闭服务只停止观察，不停止网页 Agent。任务回执仅在内存中保存。绑定会话中从网页发起的工作流也通过同一工作台发布检查通过的预览，此时 `jobId=null`，已有 MCP 任务回执保持不变。确认回调捕获结果归属，迟到结果不能覆盖更新的语音要求。
 
-`sessionId` 必须由受信任的部署者选定，并与小智端的使用者及其允许访问的网页会话对应。存储的会话检查不是身份认证；当前没有自动绑定或验证小智用户身份的机制，不适合共享或多用户部署。地址相当于访问凭据，应只由受信任的部署者持有。单个插件实例创建一个连接，部署者负责避免重复加载实例。
+`moss_experiment_status(id)` 查询当前语音实验会话；尚未委派时回退到部署者指定的初始会话。`moss_status` 返回电脑端服务、委派是否可用及支持的实验任务，不代表设备就绪；其中 `live_control` 为 `approval_required` 表示电脑端可在网页确认后运行真机，为 `disabled` 表示真机控制已关闭，为 `unavailable` 表示未配置机器人地址。桥接不提供真机执行工具。被委派的会话可通过实验助手的真机工具请求受控运行，但仍须通过协议分析检查并经操作员在网页确认；桥接不能绕过这些步骤。
 
-工具包含 `moss_status`、`moss_experiment_status`、`moss_delegate` 和 `moss_task_status`。`moss_experiment_status` 要求调用方提供实验 ID，仅查询所选会话内当前版本和最多 20 项最新检查状态，不返回协议、会话内容或检查结果。检查记录是存储数据，不证明设备就绪或运行安全。`moss_delegate` 以不超过 8000 字节的文字委派到第一个工作区中使用 Agent 模式的新会话，标题为带时间戳的小智委派实验，并以 `来自小智的委派：…` 提交给本地网页 Agent；委派内容在网页会话列表中可见，该会话的实验动画也会在此打开。同一时刻只允许一个委派任务在执行；运行或超时期间再次调用 `moss_delegate` 会更新同一任务和会话，不再拒绝。每次改口提供完整最新要求并递增 `generation`；提交回复包含该次请求的 `generation` 和任务的 `currentGeneration`，状态查询返回当前 `generation`。改口立即使此前结果失效，保留原超时和播报预算，通过控制器的 `steer` 模式在最近步骤送入最新要求。会话初始化或提交等待期间尚未送入的改口会合并为最新版。结果跟踪只接受当前请求的领取事件及其 turn；旧请求的领取、丢弃、当前请求领取前的答复和其他 turn 都不能完成改口后的任务。这不会取消已执行中的工具、回滚副作用或移除旧网页预览；Agent 会收到以最大需求版本重新生成冲突分析和预览的指示。内存中最多保留 100 条已完成任务。`moss_task_status` 按任务 ID 返回 `running`、`completed`、`error` 或 `timeout`；`completed` 携带 Agent 的最终答复文字（最多 4000 字符），`timeout` 表示五分钟等待已超时；任务仍视为活跃并阻止新的委派，直到收到其终态事件。桥接会继续跟踪任务并在结束时更新状态。提交报错时任务是否已入队可能无法确定；返回的任务会继续保持活跃并被跟踪，使用者应查看网页会话。如果始终没有收到终态事件，该任务会占用并发名额直到桥接关闭。关闭桥接会停止跟踪，但不会停止网页任务；任务结果可能未知。任务记录保存在内存中，重启后丢失。
+认证 Connection 提供 `GET /api/xiaozhi-workbench`，返回最新导航序号、会话、任务、状态及答复，以及不含凭据的 `connection` 和 `wakeup` 诊断。`connection.status=ready` 表示接入点已请求并收到工具清单，不表示实体麦克风已经验证。网页只在首次打开、追问必要条件及当前检查通过的预览就绪时跟随 `focusSequence`；普通改口和轮询保留用户选择。准备替代方案时隐藏旧预览，当前精确版本检查通过后可在 Agent 结束答复前显示。`POST /api/xiaozhi-workbench/message` 接受 JSON `{message, newExperiment?}`，作为调用同一委派服务的本地文字入口，要求同源 Origin 头，拒绝任意会话身份及其他来源网页的请求，不增加 Agent 权限。
 
-`moss_task_status` 还返回 `speech: { speak, text }`。调用方仅在 `speak` 为 true 时原样播报 `text`，为 false 时保持静默（`text` 为 null）；不得朗读或概述 `result`，也不得追加等待提示。每个任务在 `running` 和 `timeout` 期间合计允许三次等待回复，随后保持静默直到终态回复。完成时只返回一次“任务已完成，请在网页会话中查看结果。”；错误时返回一次引导使用者核查网页会话的可操作短句。每次轮询（包括静默回复）仍保留机器状态和原有完整 `result`。每次 `get`/状态查询会消费所有调用方共享的播报机会；响应丢失后不重播，也没有硬件送达确认。新任务有独立预算；重启会丢失全部任务记录。窗口焦点行为不在此策略范围内。这些是本地响应决策，不表示实体 TTS 播放已经验证。
+此功能面向单操作员。小智接入点不提供已验证的人类身份；持有接入凭据者可以网页 Agent 现有的本地权限提交工作。会话归属检查不是用户认证。部署者须保密接入地址并避免重复启动桥接实例。
 
-委派内容以网页 Agent 的全部本地权限在新建工作区会话中执行；小智不提供已验证的用户身份，因此委派仅限运行网页应用的同一受信任使用者。此插件不公开真机控制。
+每个任务周期最多给出三次自动等待确认，偏移为 0、15、45 秒；提前完成不补齐提示。改口共用预算，终态之后的新任务重置预算；达到上限后工具明确要求安静。完成时只保留一句简短提醒，用户主动询问进度另算。实际播报仍由托管模型控制，须通过设备验证。完成提醒通过当前语音对话中的任务状态查询交付，不提供空闲设备主动播报通道。
 
-本地测试不建立外部连接，在 `LabScriptAI-OT-V3` 应用目录运行：
+在项目根目录使用 Node 24.9 或更高版本运行针对性测试：
 
 ```sh
-node --import tsx/esm --test internal/xiaozhi/bridge.test.mjs internal/xiaozhi/delegation.test.mjs
+node --import tsx/esm --test internal/xiaozhi/*.test.mjs
 ```
 
-还需要验证小智硬件的工具调用、会话身份绑定和重连行为；如需主动播报，还须确认平台提供的通知接口并单独实现验证。
+
+macOS 默认在首次接受委派时打开工作台（`MOSS_AUTO_WAKE=1`）；`MOSS_BROWSER_APP` 可选 Google Chrome（默认）、Microsoft Edge 或 Safari。服务复用同一本地来源的标签页，恢复最小化窗口；匹配的标签页均已关闭时才新开窗口。服务重启后的首次唤起会重新认证标签页，后续普通改口只检查标签页是否存在，不置前、不刷新；标签页缺失时重新打开。追问条件及当前预览就绪时恢复窗口并置前。macOS 可能要求操作员允许浏览器自动化。授权登录地址通过标准输入交给本地助手，不进入命令参数或日志。唤起失败或关闭自动唤起都不会取消已接受的任务；`wakeup` 保留状态与原因，失败也会留下不含凭据的日志。其他操作系统启用此功能时返回 `unsupported_platform`，可保持网页打开或关闭自动唤起。
+
+部署配置可调整 `transport.reconnectMinMs`、`reconnectMaxMs`、`connectTimeoutMs`、`heartbeatMs`、`feedback.offsetsMs`、`pollWaitMs` 及 `wakeup.enabled`、`browserApp`、`timeoutMs`；这些参数只影响连接维护和可信本地浏览器助手，不增加 Agent 工具权限。

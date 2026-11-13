@@ -296,6 +296,8 @@ describe('experiment animation entry', () => {
       },
     }
     ctx.provide('resources', { register: () => () => {} } as never)
+    ctx.provide('uiWorkspace', { openSession() {} } as never)
+    ctx.provide('sessions', { async refresh() {} } as never)
     ctx.provide('sidebarRightTabs', tabs as never)
     ctx.provide('sidebarRight', { mounted: { getSnapshot: () => undefined } } as never)
     ctx.provide('slots', slots as never)
@@ -309,8 +311,8 @@ describe('experiment animation entry', () => {
       const tab = tabs.get('experiment-animation')
       expect(tab?.guide?.[0]?.title()).toBe(en.title)
       expect(tab?.guide?.[0]?.icon).toBeDefined()
-      expect(entries.map(entry => entry.name)).toEqual(['conversation.composer.dock', 'sidebar.right.pane.tab', 'sidebar.right.pane.tab.title'])
-      expect(entries.slice(1).every(entry => entry.key === tab?.id)).toBe(true)
+      expect(entries.map(entry => entry.name)).toEqual(['shell.overlay', 'conversation.composer.dock', 'sidebar.right.pane.tab', 'sidebar.right.pane.tab.title'])
+      expect(entries.slice(2).every(entry => entry.key === tab?.id)).toBe(true)
     } finally {
       await fiber.dispose()
     }
