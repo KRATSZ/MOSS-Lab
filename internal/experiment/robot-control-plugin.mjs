@@ -62,6 +62,13 @@ export function apply(ctx, config) {
     return { expected_robot_type: row.robot_type, expected_robot_serial: row.robot_serial }
   }
 
+  function sendRunAction(row, action, expectedStatus, beforeDispatch) {
+    return call('control_run', {
+      run_id: row.robot_run_id, action, return_after_action: true, ...identity(row),
+      ...(expectedStatus ? { expected_run_status: expectedStatus } : {}),
+    }, undefined, beforeDispatch)
+  }
+
   async function reconcilePreparedRun(row) {
     const robot = await status()
     if (robot.serial !== row.robot_serial || robot.robotType !== row.robot_type) {
@@ -130,20 +137,17 @@ export function apply(ctx, config) {
       physicalId = result.created_run?.data?.id ?? result.created_run?.id
       if (!identifier(physicalId)) throw new ExperimentError('ROBOT_PREPARATION_INVALID', 'OT did not return a usable run ID.')
       store.recordRobotRun(sessionId, id, physicalId)
-      if (run(sessionId, id).cancel_requested) {
+      const prepared = run(sessionId, id)
+      if (prepared.cancel_requested) {
         const stopped = await controlRun({ sessionId, id, action: 'stop' })
         return { id, runId: physicalId, status: stopped.status === 'action_acknowledged' ? 'stop_acknowledged' : 'stop_unconfirmed', revision }
       }
       if (result.preflight_gate?.allowed_to_play !== true) throw new ExperimentError('ROBOT_PREFLIGHT_BLOCKED', 'The robot did not pass its setup checks.')
-      const beforePlay = () => {
+      await sendRunAction(prepared, 'play', ['idle'], () => {
         assertCurrent()
         const current = run(sessionId, id)
         if (!current.active || current.cancel_requested) throw new ExperimentError('ROBOT_RUN_INACTIVE', 'Robot preparation was cancelled.')
-      }
-      await call('control_run', {
-        run_id: physicalId, action: 'play', expected_run_status: ['idle'],
-        return_after_action: true, ...identity(row),
-      }, undefined, beforePlay)
+      })
       return { id, runId: physicalId, status: 'start_acknowledged', revision }
     } catch (error) {
       if (!physicalId) {
@@ -177,16 +181,13 @@ export function apply(ctx, config) {
     }
     if (!row.active) throw new ExperimentError('ROBOT_RUN_INACTIVE', 'This robot run is not active.')
     if (!row.robot_run_id) throw new ExperimentError('ROBOT_RUN_UNCONFIRMED', 'Read the current run again before controlling it.')
-    const status = action === 'pause' ? ['running'] : action === 'resume' ? ['paused'] : null
-    if (status) {
+    const expectedStatus = action === 'pause' ? ['running'] : action === 'resume' ? ['paused'] : null
+    if (expectedStatus) {
       requireLive()
       if (approved !== id) throw new ExperimentError('ROBOT_APPROVAL_STALE', 'Review this action in the workbench.')
     } else if (action !== 'stop') throw new ExperimentError('INVALID_INPUT', 'Unknown robot action.')
     try {
-      await call('control_run', {
-        run_id: row.robot_run_id, action: action === 'resume' ? 'play' : action,
-        ...(status ? { expected_run_status: status } : {}), return_after_action: true, ...identity(row),
-      }, undefined, () => {
+      await sendRunAction(row, action === 'resume' ? 'play' : action, expectedStatus, () => {
         signal?.throwIfAborted()
         intent?.assertCurrent()
         const current = run(sessionId, id)

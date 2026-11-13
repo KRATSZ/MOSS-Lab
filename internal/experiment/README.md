@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-This internal Node module stores experiment snapshots and check results in an explicitly selected SQLite file. The local launcher mounts its Cordis services, authenticated preview route, and read-only device status route, and opt-in robot control through the LabscriptAI plugin.
+This module stores experiment snapshots and check results in SQLite. The local launcher mounts authenticated preview and device status routes and offers opt-in Flex and OT-2 control through LabscriptAI OT.
 
 To opt in, add a row to a local profile patch or `--patch` overlay, replacing both paths with absolute paths on the host:
 
@@ -51,7 +51,7 @@ Run the declaration and tool tests with `node --import tsx/esm --test internal/e
 
 `buildPreview` requests portable documents from the pinned plugin through `protocol_artifacts` only after checking the session, revision, protocol hash, and latest analysis digest. MOSS verifies API/version/digests and copies only resulting HTML into its own private preview directory. It never imports plugin Python or rewrites viewer JavaScript. Animation and setup availability are independent; setup represents declared initial liquids, not inferred final contents.
 
-`PreviewResources` rechecks the current owner and task before serving fixed `animation` / `setup` resources or manifest-listed download files. `runtime-plugin.mjs` calls only `simulate_protocol` and `protocol_artifacts` through the MCP SDK; the entire plugin process is confined to a private invocation directory by the DSH sandbox. The sandbox restricts writes, not reads or network access. Failed or interrupted MCP invocations retain their private files because child-process termination is uncertain; inspect them under the configured plugin data directory before cleanup. Plugin code and dependencies are external and version-locked; see [MOSS setup](../../MOSS-LAB.md).
+`PreviewResources` rechecks the owner and current task before serving `animation`, `setup`, or manifest-listed downloads. The version-locked MCP adapter confines each plugin process's writes to a private directory. Interrupted invocations retain that directory because child-process termination is uncertain. See [MOSS setup](../../MOSS-LAB.md).
 
 A passed `protocol-analysis` check stores the full analysis bytes (`analysisBase64`) next to its SHA-256. `get_experiment` omits those bytes from its check results; they remain available internally for preview recovery. Published previews and per-session selection live only in process memory; when a session's status is polled after a restart and no preview is selected, the status route rebuilds the scene from the persisted analysis of the latest passed check for that session's newest experiment, verifies its digest, and reports `checking` until the rebuild finishes. Each process attempts recovery at most once per completed check; polling before a check passes does not consume that attempt. A stored check recorded before analysis persistence began cannot recover.
 
@@ -60,7 +60,7 @@ The authenticated `/api/robot-status` route reads `OPENTRONS_URL` at startup and
 ## Known limitations
 
 - The local host plugin provides Agent tools for model-generated protocols. Plugin operations use the local-only MCP adapter. Preview selection is in memory; after a restart the status route rebuilds it from the persisted analysis (see above), and a rebuild re-runs scene generation only, not the analysis.
-- Protocol and animation support depends on Opentrons and Flex3D. Comprehensive validation, report storage, device operations, and export are not provided. A stored `passed` result is only a caller-supplied record and must not authorize a device run.
+- Protocol and animation support depends on Opentrons and Flex3D. A stored analysis pass is one prerequisite for live operation, which also requires device checks and operator approval.
 - Late results are rejected and are not logged. Running checks are not resumed automatically after restart.
 - Session-constrained methods are storage primitives, not authentication or complete authorization. The host must authenticate and authorize the session and keep unrestricted methods and check writers on trusted internal paths. There is no backup scheduler, external-disk monitoring, or data-directory configuration integration. File identity checks detect many loss and replacement cases but cannot guarantee detection of every filesystem or storage failure or remove all time-of-check races. SQLite and filesystem errors must be surfaced by the eventual host.
 - The plugin loads from its source file. A Web profile with an overlay reached readiness without a reported plugin error; an application consumer and packaged deployment remain unverified.

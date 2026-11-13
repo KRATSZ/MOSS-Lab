@@ -28,9 +28,15 @@ export async function readPluginFile(directory, path, limit) {
   return bytes
 }
 
-/** Create an invocation-scoped, confined MCP client with only simulation and document operations.
+async function writeProtocol(directory, protocol) {
+  const path = join(directory, 'protocol.py')
+  await writeFile(path, protocol, { mode: 0o600, flag: 'wx' })
+  return path
+}
+
+/** Create a confined MCP client for simulation, documents and configured robot operations.
  * @param {object} config Frozen plugin paths, version, timeout, and sandbox service.
- * @returns {object} Analysis and portable-document methods; caller awaits operations before disposal.
+ * @returns {object} Analysis, portable-document and robot methods; caller awaits operations before disposal.
  */
 export function createPluginClient(config) {
   for (const key of ['root', 'data', 'dependencyHome', 'version']) {
@@ -80,8 +86,7 @@ export function createPluginClient(config) {
         }
         return envelope.data
       }
-      const result = await operation(call, directory)
-      return result
+      return await operation(call, directory)
     } catch (error) {
       if (error instanceof ExperimentError) throw error
       throw new ExperimentError('PLUGIN_CALL_FAILED', 'LabscriptAI operation failed; check the installed version and retry', { diagnostic, cause: error.message })
@@ -97,16 +102,12 @@ export function createPluginClient(config) {
     robot(robot, name, args, protocol, beforeDispatch) {
       return invoke(async (call, directory) => {
         if (protocol === undefined) return call(name, args)
-        const input = join(directory, 'protocol.py')
-        await writeFile(input, protocol, { mode: 0o600, flag: 'wx' })
-        return call(name, { ...args, file_path: input })
+        return call(name, { ...args, file_path: await writeProtocol(directory, protocol) })
       }, robot, beforeDispatch)
     },
     analyze(protocol) {
       return invoke(async (call, directory) => {
-        const input = join(directory, 'protocol.py')
-        await writeFile(input, protocol, { mode: 0o600, flag: 'wx' })
-        const result = await call('simulate_protocol', { protocol_path: input, analysis_only: true })
+        const result = await call('simulate_protocol', { protocol_path: await writeProtocol(directory, protocol), analysis_only: true })
         if (!result?.ok) {
           const detail = result?.analyze_errors?.map(error => error.detail || error.error || '').filter(Boolean).join('\n') || result?.error?.error || result?.stderr || 'plugin analysis failed'
           throw new ExperimentError('ANALYSIS_FAILED', `protocol analysis failed: ${String(detail).slice(0, 1800)}`)

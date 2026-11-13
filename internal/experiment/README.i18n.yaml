@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write internal/experiment/README.md
 /internal-experiment-storage:
-  en: 9a4ca361d32052d2
-  zh: 0b26d7eb4a6e2c0d
+  en: efdc42a0c8d2863a
+  zh: e1dd8ec89e77941a
 /internal-experiment-storage/initial-liquid-declarations:
   en: 970352b70b7598dd
   zh: 295903c2705013f6
 /internal-experiment-storage/preview-components:
-  en: 00a35057bf13c114
-  zh: 5e42ef711b896fc4
+  en: 95ee13e1f0373ae1
+  zh: e615b185aa12ce8a
 /internal-experiment-storage/known-limitations:
-  en: 12c4fcce7a15a822
-  zh: 7ef5ba5ece6d6be6
+  en: 1e3f4438035a4aba
+  zh: faf60538f44af479

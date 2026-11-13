@@ -76,11 +76,14 @@ export async function handleMessage(message, store, sessionId, delegation, conte
     }))
   }
   if (name === 'moss_delegate' || name === 'moss_task_status') {
-    const key = name === 'moss_delegate' ? 'message' : 'jobId'
-    if ((name === 'moss_delegate' ? Object.keys(args).some(key => !['message', 'newExperiment'].includes(key)) || (args.newExperiment !== undefined && typeof args.newExperiment !== 'boolean') : Object.keys(args).some(key => !['jobId', 'userQuery'].includes(key)) || args.userQuery !== undefined && typeof args.userQuery !== 'boolean') || typeof args[key] !== 'string' || !args[key].trim() || args[key].length > (name === 'moss_delegate' ? 8000 : 128)) return failure(id, -32602, 'Invalid tool arguments')
+    const submitting = name === 'moss_delegate'
+    const [key, flag, limit] = submitting ? ['message', 'newExperiment', 8000] : ['jobId', 'userQuery', 128]
+    if (Object.keys(args).some(arg => arg !== key && arg !== flag) ||
+      (args[flag] !== undefined && typeof args[flag] !== 'boolean') ||
+      typeof args[key] !== 'string' || !args[key].trim() || args[key].length > limit) return failure(id, -32602, 'Invalid tool arguments')
     if (!delegation) return response(id, text({ error: '委派服务不可用。' }, true))
     try {
-      if (name === 'moss_delegate') {
+      if (submitting) {
         const accepted = await delegation.submit(args.message, { newExperiment: args.newExperiment ?? false })
         return response(id, text(delegation.voiceReceipt ? { ...accepted, ...delegation.voiceReceipt(accepted.jobId) } : accepted))
       }
